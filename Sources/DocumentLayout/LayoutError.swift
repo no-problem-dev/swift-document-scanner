@@ -8,6 +8,8 @@ public enum LayoutError: Error, LocalizedError, Sendable {
     case invalidImage
     /// The Vision request failed.
     case detectionFailed(String)
+    /// The CoreML model compilation failed.
+    case modelCompilationFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +19,8 @@ public enum LayoutError: Error, LocalizedError, Sendable {
             "The provided image could not be processed"
         case .detectionFailed(let message):
             "Layout detection failed: \(message)"
+        case .modelCompilationFailed(let message):
+            "Model compilation failed: \(message)"
         }
     }
 }

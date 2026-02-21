@@ -17,7 +17,7 @@ public protocol DocumentLayoutService: Sendable {
 
 // MARK: - Implementation
 
-/// Default implementation using YOLOv8n-DocLayNet CoreML model.
+/// Default implementation using YOLOv12n-DocLayNet CoreML model.
 public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     private let configuration: LayoutConfiguration
     private let model: VNCoreMLModel
@@ -37,11 +37,12 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         10: .title,
     ]
 
+    /// Initialize with the bundled YOLOv12n model.
     public init(configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
 
-        guard let modelURL = Bundle.module.url(forResource: "YOLOv8nDocLayNet", withExtension: "mlmodelc")
-            ?? Bundle.module.url(forResource: "YOLOv8nDocLayNet", withExtension: "mlpackage")
+        guard let modelURL = Bundle.module.url(forResource: "YOLOv12nDocLayNet", withExtension: "mlmodelc")
+            ?? Bundle.module.url(forResource: "YOLOv12nDocLayNet", withExtension: "mlpackage")
         else {
             throw LayoutError.modelLoadFailed
         }
@@ -51,6 +52,31 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
 
         let mlModel = try MLModel(contentsOf: modelURL, configuration: mlConfig)
         self.model = try VNCoreMLModel(for: mlModel)
+    }
+
+    /// Initialize with an externally provided compiled model.
+    ///
+    /// Use ``compileModel(at:)`` to compile an `.mlpackage` before passing it here.
+    public init(compiledModelURL: URL, configuration: LayoutConfiguration = .default) throws {
+        self.configuration = configuration
+
+        let mlConfig = MLModelConfiguration()
+        mlConfig.computeUnits = .all
+
+        let mlModel = try MLModel(contentsOf: compiledModelURL, configuration: mlConfig)
+        self.model = try VNCoreMLModel(for: mlModel)
+    }
+
+    /// Compile an `.mlpackage` into a compiled model that can be used with ``init(compiledModelURL:configuration:)``.
+    ///
+    /// - Parameter packageURL: URL to the `.mlpackage` directory.
+    /// - Returns: URL to the compiled `.mlmodelc` directory.
+    public static func compileModel(at packageURL: URL) throws -> URL {
+        do {
+            return try MLModel.compileModel(at: packageURL)
+        } catch {
+            throw LayoutError.modelCompilationFailed(error.localizedDescription)
+        }
     }
 
     public func analyze(_ cgImage: CGImage) async throws -> LayoutResult {
