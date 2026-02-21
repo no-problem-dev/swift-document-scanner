@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "DocumentDetection", targets: ["DocumentDetection"]),
         .library(name: "DocumentOCR", targets: ["DocumentOCR"]),
         .library(name: "DocumentCamera", targets: ["DocumentCamera"]),
+        .library(name: "DocumentLayout", targets: ["DocumentLayout"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", .upToNextMajor(from: "1.4.0")),
@@ -22,6 +23,10 @@ let package = Package(
         .target(
             name: "DocumentCamera",
             dependencies: ["DocumentDetection"]
+        ),
+        .target(
+            name: "DocumentLayout",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "DocumentDetectionTests",
@@ -34,6 +39,10 @@ let package = Package(
         .testTarget(
             name: "DocumentCameraTests",
             dependencies: ["DocumentCamera"]
+        ),
+        .testTarget(
+            name: "DocumentLayoutTests",
+            dependencies: ["DocumentLayout"]
         ),
     ]
 )
