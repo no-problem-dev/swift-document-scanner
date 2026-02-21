@@ -258,13 +258,6 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
             results.append(contentsOf: kept)
         }
 
-        #if DEBUG
-        print("[DocumentLayout] Detected \(results.count) elements from \(candidates.count) candidates")
-        for element in results {
-            print("[DocumentLayout]   \(element.category.rawValue) conf=\(element.confidence) box=\(element.boundingBox)")
-        }
-        #endif
-
         return results
     }
 
