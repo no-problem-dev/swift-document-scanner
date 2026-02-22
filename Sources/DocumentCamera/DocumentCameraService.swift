@@ -3,6 +3,7 @@
 import CoreImage
 import DocumentDetection
 import Foundation
+import os
 import UIKit
 
 // MARK: - Protocol
@@ -12,10 +13,11 @@ public protocol DocumentCameraService: Sendable {
     /// The underlying capture session for preview display.
     nonisolated var captureSession: AVCaptureSession { get }
 
-    /// Async stream of detection results from each camera frame.
-    var detectionResults: AsyncStream<FrameDetectionResult> { get async }
+    /// Start the camera session and return a new detection results stream.
+    /// Any previous stream is finished before a new one is created.
+    func startRunning() async -> AsyncStream<FrameDetectionResult>
 
-    func startRunning() async
+    /// Stop the camera session and finish the active stream.
     func stopRunning() async
 
     /// Reset the rectangle detection stability tracking state.
@@ -43,15 +45,20 @@ public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     private var isSessionConfigured = false
     private var isFlashOn = false
 
-    // MARK: - Frame Capture
+    // MARK: - Thread-safe State (accessed from videoOutputQueue + actor)
 
-    nonisolated(unsafe) private var latestPixelBuffer: CVPixelBuffer?
+    private let streamContinuation = OSAllocatedUnfairLock<AsyncStream<FrameDetectionResult>.Continuation?>(
+        initialState: nil
+    )
+
+    /// CVPixelBuffer is non-Sendable; wrap in @unchecked Sendable to use with OSAllocatedUnfairLock.
+    private struct PixelBufferBox: @unchecked Sendable {
+        var buffer: CVPixelBuffer?
+    }
+
+    private let frameBuffer = OSAllocatedUnfairLock(initialState: PixelBufferBox())
+
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-
-    // MARK: - AsyncStream
-
-    private let detectionStream: AsyncStream<FrameDetectionResult>
-    nonisolated let detectionContinuation: AsyncStream<FrameDetectionResult>.Continuation
 
     // MARK: - Initialization
 
@@ -61,34 +68,33 @@ public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     ) {
         self.rectangleDetectionService = rectangleDetectionService
         self.configuration = configuration
-
-        (detectionStream, detectionContinuation) = AsyncStream.makeStream(
-            of: FrameDetectionResult.self
-        )
-
         super.init()
-    }
-
-    // MARK: - Public Interface
-
-    public var detectionResults: AsyncStream<FrameDetectionResult> {
-        detectionStream
     }
 
     // MARK: - Session Control
 
-    public func startRunning() {
+    public func startRunning() -> AsyncStream<FrameDetectionResult> {
+        // Finish any previous stream
+        streamContinuation.withLock { $0?.finish(); $0 = nil }
+        frameBuffer.withLockUnchecked { $0.buffer = nil }
+
         if !isSessionConfigured {
             setupCameraSession()
         }
 
         configureForScanning()
 
+        let (stream, continuation) = AsyncStream.makeStream(of: FrameDetectionResult.self)
+        streamContinuation.withLock { $0 = continuation }
+
         captureSession.startRunning()
+        return stream
     }
 
     public func stopRunning() {
         captureSession.stopRunning()
+        streamContinuation.withLock { $0?.finish(); $0 = nil }
+        frameBuffer.withLockUnchecked { $0.buffer = nil }
     }
 
     public func resetDetectionState() {
@@ -115,7 +121,8 @@ public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     }
 
     public func captureFrame() async throws -> Data {
-        guard let pixelBuffer = latestPixelBuffer else {
+        let pixelBuffer: CVPixelBuffer? = frameBuffer.withLockUnchecked { $0.buffer }
+        guard let pixelBuffer else {
             throw CameraError.imageDataNotAvailable
         }
 
@@ -230,9 +237,8 @@ extension DocumentCameraServiceImpl: AVCaptureVideoDataOutputSampleBufferDelegat
         }
 
         let frameResult = rectangleDetectionService.process(pixelBuffer)
-
-        latestPixelBuffer = pixelBuffer
-        detectionContinuation.yield(frameResult)
+        frameBuffer.withLockUnchecked { $0.buffer = pixelBuffer }
+        _ = streamContinuation.withLock { $0?.yield(frameResult) }
     }
 }
 #endif

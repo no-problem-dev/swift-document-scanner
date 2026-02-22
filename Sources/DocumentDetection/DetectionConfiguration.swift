@@ -78,4 +78,15 @@ extension DetectionConfiguration {
         minimumConfidence: 0.4,
         smoothingFactor: 0.3
     )
+
+    /// Optimized for open book spread scanning (relaxed edge detection + AF stabilization).
+    public static let bookSpread = DetectionConfiguration(
+        stabilityThreshold: 1.2,
+        positionThreshold: 0.05,
+        minimumStableFrameCount: 6,
+        maximumRectangleAreaRatio: 0.98,
+        minimumEdgeMargin: 0.005,
+        minimumConfidence: 0.3,
+        smoothingFactor: 0.25
+    )
 }

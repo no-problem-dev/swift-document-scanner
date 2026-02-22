@@ -21,9 +21,19 @@ DerivedData/
 # Swift Package Manager
 .build/
 .swiftpm/
+Package.resolved
 
 # macOS
 .DS_Store
+
+# DocC output
+docs/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
 
 # Claude Code
 .claude/
