@@ -39,6 +39,19 @@ jobs:
             --hosting-base-path swift-document-scanner \
             --output-path ./docs
 
+          # ルートURLからドキュメントへリダイレクト
+          cat > ./docs/index.html << 'REDIRECT'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=documentation/documentdetection/">
+          </head>
+          <body>
+            <p>Redirecting to <a href="documentation/documentdetection/">DocumentDetection documentation</a>...</p>
+          </body>
+          </html>
+          REDIRECT
+
       - name: Upload artifact
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
