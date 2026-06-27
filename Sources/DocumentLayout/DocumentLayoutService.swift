@@ -2,6 +2,7 @@ import CoreGraphics
 import CoreImage
 import CoreML
 import Foundation
+import os
 import Vision
 
 // MARK: - Protocol
@@ -126,12 +127,14 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
             throw LayoutError.detectionFailed("Failed to get model output tensor")
         }
 
-        return decodeYOLOOutput(
+        let all = decodeYOLOOutput(
             multiArray: multiArray,
             confidenceThreshold: configuration.confidenceThreshold,
             imageWidth: CGFloat(cgImage.width),
             imageHeight: CGFloat(cgImage.height)
         )
+        // Cap to maximumDetections, preferring highest-confidence detections.
+        return Array(all.sorted { $0.confidence > $1.confidence }.prefix(configuration.maximumDetections))
     }
 
     // MARK: - Private — YOLO Output Decoding
@@ -158,11 +161,11 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
                 channels = shape[2]
                 numPredictions = shape[1]
             } else {
-                print("[DocumentLayout] Unexpected output shape: \(shape)")
+                Logger(subsystem: "DocumentLayout", category: "inference").error("Unexpected output shape: \(shape)")
                 return []
             }
         } else {
-            print("[DocumentLayout] Unexpected output dimensions: \(shape.count)")
+            Logger(subsystem: "DocumentLayout", category: "inference").error("Unexpected output dimensions: \(shape.count)")
             return []
         }
 

@@ -23,6 +23,7 @@ public protocol DocumentCameraService: Sendable {
     /// Reset the rectangle detection stability tracking state.
     func resetDetectionState() async
 
+    /// Toggle the camera torch and return the new enabled state.
     func toggleFlash() async -> Bool
 
     /// Capture the current video frame as JPEG data.
