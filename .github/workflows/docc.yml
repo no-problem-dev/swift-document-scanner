@@ -33,7 +33,8 @@ jobs:
         run: |
           swift package --allow-writing-to-directory ./docs \
             generate-documentation \
-            --target DocumentDetection \
+            --enable-experimental-combined-documentation \
+            --target DocumentDetection --target DocumentOCR --target DocumentCamera --target DocumentLayout \
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path swift-document-scanner \
