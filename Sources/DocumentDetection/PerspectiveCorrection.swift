@@ -3,13 +3,14 @@ import CoreImage.CIFilterBuiltins
 import Foundation
 import Vision
 
-/// Applies perspective correction to extract a front-facing document image.
+/// 検出された矩形の透視変換補正を行い、正面向きの書類画像を抽出するユーティリティ。
 public enum PerspectiveCorrection {
-    /// Corrects the perspective of a detected rectangle within an image.
+    /// 画像内の検出矩形に透視変換補正を適用する。
+    ///
     /// - Parameters:
-    ///   - cgImage: The source image containing the document.
-    ///   - observation: The detected rectangle observation from Vision.
-    /// - Returns: A perspective-corrected image, or nil if correction fails.
+    ///   - cgImage: 書類を含むソース画像。
+    ///   - observation: Vision が検出した矩形観察結果。
+    /// - Returns: 透視変換補正済み画像。補正に失敗した場合は nil。
     public static func correct(cgImage: CGImage, observation: VNRectangleObservation) -> CGImage? {
         let ciImage = CIImage(cgImage: cgImage)
         let imageSize = ciImage.extent.size

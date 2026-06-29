@@ -1,14 +1,14 @@
 import Foundation
 
-/// Result of processing a single camera frame for document detection.
+/// 書類検出のための単一カメラフレームの処理結果。
 public struct FrameDetectionResult: Sendable {
-    /// EMA-smoothed corners for UI display, nil if no rectangle detected.
+    /// UI 表示用の EMA スムージング済み四隅。矩形未検出時は nil。
     public let smoothedCorners: RectangleCorners?
 
-    /// Stability score (0.0-1.0) indicating how long the rectangle has been stationary.
+    /// 矩形が静止している時間を示す安定度スコア（0.0〜1.0）。
     public let stability: Double
 
-    /// Whether stability threshold has been exceeded and auto-capture should trigger.
+    /// 安定度のしきい値を超え、自動キャプチャを発動すべき状態かどうか。
     public let shouldAutoCapture: Bool
 
     public init(

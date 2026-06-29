@@ -15,7 +15,7 @@ extension RectangleCorners {
         )
     }
 
-    /// Exponential moving average smoothing with a new observation.
+    /// 新しい観察結果との指数移動平均スムージングを適用する。
     func smoothed(with observation: VNRectangleObservation, factor alpha: CGFloat) -> RectangleCorners {
         func smooth(_ current: CGPoint, _ previous: CGPoint) -> CGPoint {
             CGPoint(
@@ -34,21 +34,21 @@ extension RectangleCorners {
 
 // MARK: - Protocol
 
-/// Detects rectangular documents in camera frames and static images.
+/// カメラフレームおよび静止画像から書類の矩形を検出するサービス。
 public protocol RectangleDetectionService: AnyObject, Sendable {
-    /// Process a camera frame with smoothing and stability tracking.
+    /// カメラフレームを EMA スムージングと安定性追跡付きで処理する。
     func process(_ pixelBuffer: CVPixelBuffer) -> FrameDetectionResult
 
-    /// Single-shot detection on a static image (stateless).
+    /// 静止画像に対するシングルショット検出（ステートレス）。
     func detect(in cgImage: CGImage) -> VNRectangleObservation?
 
-    /// Reset internal stability tracking state.
+    /// 内部の安定性追跡状態をリセットする。
     func reset()
 }
 
 // MARK: - Implementation
 
-/// Default implementation using VNDetectDocumentSegmentationRequest.
+/// `VNDetectDocumentSegmentationRequest` を使用するデフォルト実装。
 public final class RectangleDetectionServiceImpl: RectangleDetectionService, @unchecked Sendable {
     private let configuration: DetectionConfiguration
 

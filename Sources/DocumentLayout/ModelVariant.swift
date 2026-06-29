@@ -1,16 +1,19 @@
 import Foundation
 
-/// Available YOLOv12-DocLayNet model variants for document layout detection.
+/// 書類レイアウト検出に使用できる YOLOv12-DocLayNet モデルバリアント。
 ///
-/// The `.nano` variant is bundled with the package. Larger variants offer
-/// improved accuracy but must be downloaded separately.
+/// `.nano` バリアントはパッケージにバンドル済み。大きなバリアントは精度が高いが、別途ダウンロードが必要。
 public enum ModelVariant: String, Sendable, CaseIterable, Codable {
+    /// 最軽量モデル（約 6 MB）。パッケージにバンドル済みで追加ダウンロード不要。速度優先の用途向け。
     case nano
+    /// ナノより高精度な小型モデル（約 19 MB）。別途ダウンロードが必要。
     case small
+    /// 精度と速度のバランス型モデル（約 41 MB）。別途ダウンロードが必要。
     case medium
+    /// 最高精度モデル（約 54 MB）。別途ダウンロードが必要。
     case large
 
-    /// Human-readable display name.
+    /// モデルの表示名。
     public var displayName: String {
         switch self {
         case .nano: "Nano"
@@ -20,7 +23,7 @@ public enum ModelVariant: String, Sendable, CaseIterable, Codable {
         }
     }
 
-    /// Approximate model size in megabytes (CoreML FP16).
+    /// CoreML FP16 での推定モデルサイズ（メガバイト）。
     public var approximateSizeMB: Int {
         switch self {
         case .nano: 6
@@ -30,7 +33,7 @@ public enum ModelVariant: String, Sendable, CaseIterable, Codable {
         }
     }
 
-    /// mAP50-95 accuracy on DocLayNet benchmark.
+    /// DocLayNet ベンチマークでの mAP50-95 精度スコア。
     public var accuracy: Double {
         switch self {
         case .nano: 0.756
@@ -40,12 +43,12 @@ public enum ModelVariant: String, Sendable, CaseIterable, Codable {
         }
     }
 
-    /// Whether this variant is bundled with the package (no download needed).
+    /// パッケージにバンドルされているか（追加ダウンロード不要かどうか）。
     public var isBundled: Bool {
         self == .nano
     }
 
-    /// CoreML model file name (without extension).
+    /// CoreML モデルファイル名（拡張子なし）。
     public var modelFileName: String {
         switch self {
         case .nano: "YOLOv12nDocLayNet"

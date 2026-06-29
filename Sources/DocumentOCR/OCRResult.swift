@@ -1,11 +1,11 @@
 import Foundation
 
-/// Result of OCR text recognition.
+/// OCR テキスト認識の結果。
 public struct OCRResult: Sendable {
-    /// Full recognized text (lines joined by newlines).
+    /// 認識されたテキスト全文（行を改行で結合）。
     public let text: String
 
-    /// Average confidence across all recognized text observations (0.0-1.0), nil if no text found.
+    /// 全認識結果の平均信頼度（0.0〜1.0）。テキストが検出されなかった場合は nil。
     public let confidence: Float?
 
     public init(text: String, confidence: Float?) {

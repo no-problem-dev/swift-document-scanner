@@ -1,21 +1,21 @@
 import Foundation
 
-/// Configuration for OCR text recognition.
+/// OCR テキスト認識の設定。
 public struct OCRConfiguration: Sendable {
-    /// Recognition languages in priority order (e.g., ["ja-JP", "en-US"]).
+    /// 認識言語の優先度順リスト（例: ["ja-JP", "en-US"]）。
     public var recognitionLanguages: [String]
 
-    /// Recognition accuracy level.
+    /// 認識精度レベル。
     public var recognitionLevel: RecognitionLevel
 
-    /// Whether to apply language correction post-processing.
+    /// 認識後に言語補正処理を適用するかどうか。
     public var usesLanguageCorrection: Bool
 
-    /// Recognition accuracy vs speed tradeoff.
+    /// 認識精度と速度のトレードオフ設定。
     public enum RecognitionLevel: Sendable {
-        /// Higher accuracy, slower processing.
+        /// 高精度・低速。
         case accurate
-        /// Lower accuracy, faster processing.
+        /// 低精度・高速。
         case fast
     }
 
@@ -33,12 +33,12 @@ public struct OCRConfiguration: Sendable {
 // MARK: - Presets
 
 extension OCRConfiguration {
-    /// Japanese + English, accurate mode with language correction.
+    /// 日本語 + 英語、高精度モード、言語補正あり。
     public static let japanese = OCRConfiguration(
         recognitionLanguages: ["ja-JP", "en-US"]
     )
 
-    /// English only, accurate mode with language correction.
+    /// 英語のみ、高精度モード、言語補正あり。
     public static let english = OCRConfiguration(
         recognitionLanguages: ["en-US"]
     )

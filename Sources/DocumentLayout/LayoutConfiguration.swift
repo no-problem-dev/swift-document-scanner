@@ -1,14 +1,14 @@
 import Foundation
 
-/// Configuration for document layout detection.
+/// 書類レイアウト検出の設定。
 public struct LayoutConfiguration: Sendable {
-    /// Minimum confidence threshold for detections (0.0-1.0).
+    /// 検出に使用する最小信頼度しきい値（0.0〜1.0）。
     public var confidenceThreshold: Float
 
-    /// Maximum number of detections to return per image.
+    /// 1 画像あたりの最大検出数。
     public var maximumDetections: Int
 
-    /// Input image size for the model (width and height in pixels).
+    /// モデルの入力画像サイズ（ピクセル、幅と高さ共通）。
     public var inputSize: Int
 
     public init(
@@ -25,11 +25,10 @@ public struct LayoutConfiguration: Sendable {
 // MARK: - Presets
 
 extension LayoutConfiguration {
-    /// Default configuration for general document layout analysis.
+    /// 一般的な書類レイアウト解析向けデフォルト設定。
     public static let `default` = LayoutConfiguration()
 
-    /// Configuration optimized for figure extraction from book pages.
-    /// Uses a higher confidence threshold to reduce false positives.
+    /// 書籍ページからの図抽出向け最適化設定。信頼度しきい値を高くして誤検出を抑える。
     public static let bookPage = LayoutConfiguration(
         confidenceThreshold: 0.35,
         maximumDetections: 50

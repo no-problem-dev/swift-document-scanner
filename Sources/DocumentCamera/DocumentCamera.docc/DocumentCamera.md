@@ -1,10 +1,10 @@
 # ``DocumentCamera``
 
-Control an AVCaptureSession for document scanning, streaming live ``FrameDetectionResult`` values as an `AsyncStream` and capturing JPEG frames on demand.
+`AVCaptureSession` を制御して書類スキャンを行い、ライブの ``FrameDetectionResult`` を `AsyncStream` として配信し、フレームをオンデマンドで JPEG キャプチャする。
 
 ## Overview
 
-`DocumentCamera` wraps AVFoundation session management and integrates with `DocumentDetection` to deliver a ready-to-use camera pipeline. Set up the preview with ``CameraPreviewView`` and start the detection stream with ``DocumentCameraService/startRunning()``.
+`DocumentCamera` は AVFoundation のセッション管理をラップし、`DocumentDetection` と統合してすぐに使えるカメラパイプラインを提供する。``CameraPreviewView`` でプレビューを表示し、``DocumentCameraService/startRunning()`` で検出ストリームを開始する。
 
 ```swift
 import DocumentCamera
@@ -32,20 +32,20 @@ for await result in stream {
 
 ## Topics
 
-### Configuration
+### 設定
 
 - ``CameraConfiguration``
 
-### Camera Service
+### カメラサービス
 
 - ``DocumentCameraService``
 - ``DocumentCameraServiceImpl``
 
-### Errors
+### エラー
 
 - ``CameraError``
 
-### SwiftUI Views
+### SwiftUI ビュー
 
 - ``CameraPreviewView``
 - ``RectangleOverlayView``

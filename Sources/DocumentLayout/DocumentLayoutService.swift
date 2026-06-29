@@ -7,21 +7,28 @@ import Vision
 
 // MARK: - Protocol
 
-/// Detects document layout elements (text, pictures, tables, etc.) in images.
+/// 画像内の書類レイアウト要素（テキスト・図・テーブルなど）を検出するサービス。
 public protocol DocumentLayoutService: Sendable {
-    /// Analyze document layout from a CGImage.
+    /// CGImage から書類レイアウトを解析する。
+    ///
+    /// - Parameter cgImage: 解析対象の CGImage。
+    /// - Returns: 垂直位置（上から下）でソート済みの `LayoutResult`。
+    /// - Throws: `LayoutError.invalidImage`（画像のリサイズ失敗）、`LayoutError.detectionFailed(_:)`（モデル推論失敗）。
     func analyze(_ cgImage: CGImage) async throws -> LayoutResult
 
-    /// Analyze document layout from JPEG/PNG image data.
+    /// JPEG/PNG 画像データから書類レイアウトを解析する。
+    ///
+    /// - Parameter imageData: JPEG または PNG 形式の画像データ。
+    /// - Returns: 垂直位置（上から下）でソート済みの `LayoutResult`。
+    /// - Throws: `LayoutError.invalidImage`（Data → CGImage 変換失敗またはリサイズ失敗）、`LayoutError.detectionFailed(_:)`（モデル推論失敗）。
     func analyze(imageData: Data) async throws -> LayoutResult
 }
 
 // MARK: - Implementation
 
-/// Default implementation using YOLOv12-DocLayNet CoreML model.
+/// YOLOv12-DocLayNet CoreML モデルを使用するデフォルト実装。
 ///
-/// Performs raw tensor inference (no NMS in model) and applies
-/// confidence filtering + NMS post-processing in Swift.
+/// Swift 側でテンソル推論・信頼度フィルタリング・クラス別 NMS 後処理を行う（モデル自体は NMS なし）。
 public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     private let configuration: LayoutConfiguration
     private let mlModel: MLModel
@@ -47,7 +54,7 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         10: .title,
     ]
 
-    /// Initialize with the bundled YOLOv12n model.
+    /// バンドル済み YOLOv12n モデルで初期化する。
     public init(configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
 
@@ -63,9 +70,9 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         self.mlModel = try MLModel(contentsOf: modelURL, configuration: mlConfig)
     }
 
-    /// Initialize with an externally provided compiled model.
+    /// 外部提供のコンパイル済みモデルで初期化する。
     ///
-    /// Use ``compileModel(at:)`` to compile an `.mlpackage` before passing it here.
+    /// ``compileModel(at:)`` で `.mlpackage` をコンパイルしてから渡す。
     public init(compiledModelURL: URL, configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
 
@@ -75,10 +82,11 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         self.mlModel = try MLModel(contentsOf: compiledModelURL, configuration: mlConfig)
     }
 
-    /// Compile an `.mlpackage` into a compiled model that can be used with ``init(compiledModelURL:configuration:)``.
+    /// `.mlpackage` を ``init(compiledModelURL:configuration:)`` で使えるコンパイル済みモデルに変換する。
     ///
-    /// - Parameter packageURL: URL to the `.mlpackage` directory.
-    /// - Returns: URL to the compiled `.mlmodelc` directory.
+    /// - Parameter packageURL: `.mlpackage` ディレクトリの URL。
+    /// - Returns: コンパイル済み `.mlmodelc` ディレクトリの URL。
+    /// - Throws: コンパイルに失敗した場合は ``LayoutError/modelCompilationFailed(_:)``。
     public static func compileModel(at packageURL: URL) throws -> URL {
         do {
             return try MLModel.compileModel(at: packageURL)

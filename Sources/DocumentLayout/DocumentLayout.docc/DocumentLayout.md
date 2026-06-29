@@ -1,10 +1,10 @@
 # ``DocumentLayout``
 
-Analyze document layout elements — titles, text blocks, tables, figures, and more — using a bundled YOLOv12n-DocLayNet CoreML model.
+バンドル済みの YOLOv12n-DocLayNet CoreML モデルを使用して、タイトル・テキストブロック・テーブル・図など書類レイアウト要素を解析する。
 
 ## Overview
 
-`DocumentLayout` runs a YOLOv12n model fine-tuned on the DocLayNet dataset (11 element categories). The implementation performs raw tensor inference in Swift, applies confidence filtering, and runs per-class Non-Maximum Suppression (NMS).
+`DocumentLayout` は DocLayNet データセット（11 要素カテゴリ）でファインチューニングした YOLOv12n モデルを実行する。Swift 側でテンソル推論・信頼度フィルタリング・クラス別 NMS 後処理を行う。
 
 ```swift
 import DocumentLayout
@@ -26,29 +26,29 @@ let pictures = result.pictures
 let headers = result.elements(ofCategory: .sectionHeader)
 ```
 
-Use ``LayoutCropper`` to cut individual elements out of the source image for downstream processing such as OCR.
+``LayoutCropper`` を使って個々の要素をソース画像から切り抜き、OCR などの下流処理に渡す。
 
 ## Topics
 
-### Configuration
+### 設定
 
 - ``LayoutConfiguration``
 - ``ModelVariant``
 
-### Layout Service
+### レイアウトサービス
 
 - ``DocumentLayoutService``
 - ``DocumentLayoutServiceImpl``
 
-### Results
+### 結果
 
 - ``LayoutResult``
 - ``LayoutElement``
 
-### Utilities
+### ユーティリティ
 
 - ``LayoutCropper``
 
-### Errors
+### エラー
 
 - ``LayoutError``

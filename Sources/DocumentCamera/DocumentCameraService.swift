@@ -8,31 +8,37 @@ import UIKit
 
 // MARK: - Protocol
 
-/// Camera service for document scanning with live rectangle detection.
+/// 矩形検出付きドキュメントスキャン用カメラサービス。
 public protocol DocumentCameraService: Sendable {
-    /// The underlying capture session for preview display.
+    /// プレビュー表示に使用する AVCaptureSession。
     nonisolated var captureSession: AVCaptureSession { get }
 
-    /// Start the camera session and return a new detection results stream.
-    /// Any previous stream is finished before a new one is created.
+    /// カメラセッションを開始し、検出結果を流す AsyncStream を返す。
+    ///
+    /// 前のストリームが存在する場合は完了させてから新しいストリームを生成する。
     func startRunning() async -> AsyncStream<FrameDetectionResult>
 
-    /// Stop the camera session and finish the active stream.
+    /// カメラセッションを停止し、アクティブなストリームを完了させる。
     func stopRunning() async
 
-    /// Reset the rectangle detection stability tracking state.
+    /// 矩形検出の安定性追跡状態をリセットする。
     func resetDetectionState() async
 
-    /// Toggle the camera torch and return the new enabled state.
+    /// カメラのトーチを切り替え、変更後の有効状態を返す。
+    ///
+    /// - Returns: トーチがオンの場合 `true`、オフの場合 `false`。
     func toggleFlash() async -> Bool
 
-    /// Capture the current video frame as JPEG data.
+    /// 現在のビデオフレームを JPEG データとしてキャプチャする。
+    ///
+    /// - Returns: JPEG 画像データ。
+    /// - Throws: フレームが利用できない場合は ``CameraError/imageDataNotAvailable``。
     func captureFrame() async throws -> Data
 }
 
 // MARK: - Implementation
 
-/// Default camera implementation using AVCaptureSession + DocumentDetection.
+/// AVCaptureSession と DocumentDetection を使用するデフォルト実装。
 public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     // MARK: - Properties
 
@@ -63,6 +69,10 @@ public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
 
     // MARK: - Initialization
 
+    /// DocumentCameraServiceImpl を初期化する。
+    ///
+    /// - Parameter rectangleDetectionService: 外部で構築した矩形検出サービス。`RectangleDetectionServiceImpl` を使用する場合は呼び出し元で生成して渡す。
+    /// - Parameter configuration: フォーカス計算（最小被写体距離・ズーム係数）および JPEG 品質などのカメラ設定。省略時はデフォルト値を使用。
     public init(
         rectangleDetectionService: any RectangleDetectionService,
         configuration: CameraConfiguration = CameraConfiguration()

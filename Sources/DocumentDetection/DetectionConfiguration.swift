@@ -1,26 +1,26 @@
 import Foundation
 
-/// Configuration for rectangle detection behavior.
+/// 矩形検出の動作設定。
 public struct DetectionConfiguration: Sendable {
-    /// Time (seconds) the rectangle must remain stable before auto-capture triggers.
+    /// 自動キャプチャが発動するまでに矩形が安定し続ける必要がある時間（秒）。
     public var stabilityThreshold: TimeInterval
 
-    /// Maximum corner movement (0.0-1.0 normalized) to still count as "stable".
+    /// 「安定」とみなす最大コーナー移動量（0.0〜1.0 正規化座標）。
     public var positionThreshold: CGFloat
 
-    /// Minimum consecutive stable frames before the stability timer starts.
+    /// 安定タイマーを開始するまでに必要な連続安定フレーム数。
     public var minimumStableFrameCount: Int
 
-    /// Rectangles larger than this ratio of the full image are rejected as "entire frame".
+    /// フレーム全体の書類として除外する矩形の最大面積比率。
     public var maximumRectangleAreaRatio: CGFloat
 
-    /// Minimum distance from edges (0.0-0.5) for a valid rectangle.
+    /// 有効な矩形の端からの最小マージン（0.0〜0.5）。
     public var minimumEdgeMargin: CGFloat
 
-    /// Minimum Vision confidence (0.0-1.0) for a valid detection.
+    /// 有効な検出とみなす Vision の最小信頼度（0.0〜1.0）。
     public var minimumConfidence: Float
 
-    /// EMA smoothing factor (0.0 = very smooth, 1.0 = no smoothing).
+    /// EMA スムージング係数（0.0 = 最大平滑化、1.0 = スムージングなし）。
     public var smoothingFactor: CGFloat
 
     public init(
@@ -46,7 +46,7 @@ public struct DetectionConfiguration: Sendable {
 // MARK: - Presets
 
 extension DetectionConfiguration {
-    /// Default configuration for general document scanning.
+    /// 一般的な書類スキャン向けデフォルト設定。
     public static let `default` = DetectionConfiguration(
         stabilityThreshold: 2.0,
         positionThreshold: 0.03,
@@ -57,7 +57,7 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// Optimized for receipt scanning (narrower documents).
+    /// レシート（縦長の狭い書類）向け最適化設定。
     public static let receipt = DetectionConfiguration(
         stabilityThreshold: 2.0,
         positionThreshold: 0.03,
@@ -68,7 +68,7 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// Optimized for book page scanning (larger documents, faster capture).
+    /// 書籍ページ（大きな書類、高速キャプチャ）向け最適化設定。
     public static let bookPage = DetectionConfiguration(
         stabilityThreshold: 1.5,
         positionThreshold: 0.04,
@@ -79,7 +79,7 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// Optimized for open book spread scanning (relaxed edge detection + AF stabilization).
+    /// 見開きページスキャン向け最適化設定（緩やかな検出・広いエッジ許容範囲）。
     public static let bookSpread = DetectionConfiguration(
         stabilityThreshold: 1.2,
         positionThreshold: 0.05,

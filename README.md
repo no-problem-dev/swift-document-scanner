@@ -1,15 +1,17 @@
 # DocumentScanner
 
-iOS向けのドキュメントスキャニング Swift パッケージ
+Swift package for iOS document scanning
+
+English | [日本語](./README.ja.md)
 
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)
 ![Platforms](https://img.shields.io/badge/Platforms-iOS%2017.0+%20%7C%20macOS%2014.0+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-## 特徴
+## Features
 
 ```swift
-// カメラでリアルタイム矩形検出
+// Real-time rectangle detection via camera
 let stream = await cameraService.startRunning()
 for await result in stream {
     if result.shouldAutoCapture {
@@ -17,101 +19,100 @@ for await result in stream {
     }
 }
 
-// OCRでテキスト認識
+// Text recognition via OCR
 let ocrResult = try await ocrService.recognizeText(from: imageData)
 print(ocrResult.text)
 
-// ドキュメントレイアウト解析（YOLOv12n-DocLayNet）
+// Document layout analysis (YOLOv12n-DocLayNet)
 let layout = try await layoutService.analyze(cgImage)
-print(layout.tables) // テーブル要素を取得
+print(layout.tables) // retrieve table elements
 ```
 
-- **4つの独立モジュール** - DocumentCamera / DocumentDetection / DocumentOCR / DocumentLayout
-- **リアルタイム矩形検出** - EMAスムージングによる安定した検出
-- **自動キャプチャ** - 安定性追跡による自動撮影トリガー
-- **多言語OCR** - 日本語・英語・中国語など多言語テキスト認識
-- **AIレイアウト解析** - YOLOv12n-DocLayNetモデルによる11カテゴリの文書要素検出
-- **プロトコルベース設計** - テスト容易な依存性注入パターン
-- **Swift Concurrency対応** - actor・AsyncStream・Sendableによるスレッドセーフ設計
-- **プリセット設定** - 書類・レシート・書籍など用途別の最適化プリセット
+- **4 independent modules** — DocumentCamera / DocumentDetection / DocumentOCR / DocumentLayout
+- **Real-time rectangle detection** — stable detection with EMA smoothing
+- **Auto-capture** — automatic shutter trigger via stability tracking
+- **Multi-language OCR** — Japanese, English, Chinese, and more
+- **AI layout analysis** — 11-category document element detection with YOLOv12n-DocLayNet
+- **Protocol-based design** — dependency injection for easy testing
+- **Swift Concurrency** — thread-safe design using actor, AsyncStream, and Sendable
+- **Preset configurations** — optimized presets for documents, receipts, books, and more
 
-## インストール
+## Installation
 
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.3.0"))
+    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.3.1"))
 ]
 ```
 
-必要なモジュールだけを選択してインポート:
+Import only the modules you need:
 
 ```swift
-// 全モジュール
+// All modules
 .product(name: "DocumentCamera", package: "swift-document-scanner"),
 .product(name: "DocumentDetection", package: "swift-document-scanner"),
 .product(name: "DocumentOCR", package: "swift-document-scanner"),
 .product(name: "DocumentLayout", package: "swift-document-scanner"),
 
-// または必要なモジュールだけ
+// Or just the ones you need
 .product(name: "DocumentOCR", package: "swift-document-scanner"),
 ```
 
-または Xcode: File > Add Package Dependencies > URL入力
+Or in Xcode: File > Add Package Dependencies > enter the URL above.
 
-## モジュール構成
+## Module Overview
 
-| モジュール | 説明 | 依存 |
-|-----------|------|------|
-| **DocumentDetection** | 矩形検出・安定性追跡 | Vision |
-| **DocumentCamera** | カメラ制御・ライブ検出ストリーム | DocumentDetection, AVFoundation |
-| **DocumentOCR** | テキスト認識（多言語） | Vision |
-| **DocumentLayout** | AIレイアウト解析（YOLOv12n） | CoreML, Vision |
+| Module | Description | Dependencies |
+|--------|-------------|--------------|
+| **DocumentDetection** | Rectangle detection and stability tracking | Vision |
+| **DocumentCamera** | Camera control and live detection stream | DocumentDetection, AVFoundation |
+| **DocumentOCR** | Text recognition (multi-language) | Vision |
+| **DocumentLayout** | AI layout analysis (YOLOv12n) | CoreML, Vision |
 
-## 基本的な使い方
+## Usage
 
-### 1. ドキュメント矩形検出
+### 1. Document Rectangle Detection
 
 ```swift
 import DocumentDetection
 
-// 検出サービスを初期化（プリセット設定を使用）
+// Initialize with a preset configuration
 let detectionService = RectangleDetectionServiceImpl(
     configuration: .default
 )
 
-// カメラフレームを処理
+// Process a camera frame
 let result = detectionService.process(pixelBuffer)
 if let corners = result.smoothedCorners {
     // corners.topLeft, .topRight, .bottomLeft, .bottomRight
-    print("安定度: \(result.stability)")  // 0.0〜1.0
+    print("stability: \(result.stability)")  // 0.0–1.0
     if result.shouldAutoCapture {
-        // 自動キャプチャ条件達成
+        // Auto-capture condition met
     }
 }
 
-// 静止画像での単発検出
+// Single-shot detection on a static image
 if let observation = detectionService.detect(in: cgImage) {
-    print("検出: confidence=\(observation.confidence)")
+    print("detected: confidence=\(observation.confidence)")
 }
 ```
 
-#### 検出プリセット
+#### Detection Presets
 
 ```swift
-DetectionConfiguration.default    // 一般的な書類スキャン
-DetectionConfiguration.receipt    // レシート（狭い文書）
-DetectionConfiguration.bookPage   // 書籍ページ（大きい文書、高速キャプチャ）
-DetectionConfiguration.bookSpread // 見開きページ（緩やかな検出）
+DetectionConfiguration.default    // General document scanning
+DetectionConfiguration.receipt    // Receipt (narrow document)
+DetectionConfiguration.bookPage   // Book page (large document, faster capture)
+DetectionConfiguration.bookSpread // Book spread (relaxed detection)
 ```
 
-### 2. カメラ + リアルタイム検出
+### 2. Camera + Live Detection
 
 ```swift
 import DocumentCamera
 import DocumentDetection
 
-// サービスを初期化
 let detectionService = RectangleDetectionServiceImpl(
     configuration: .default
 )
@@ -120,112 +121,112 @@ let cameraService = DocumentCameraServiceImpl(
     configuration: .a4Document
 )
 
-// カメラプレビュー（SwiftUI）
+// Camera preview (SwiftUI)
 CameraPreviewView(session: cameraService.captureSession)
 
-// カメラ開始 → 検出結果をストリーミング
+// Start camera and stream detection results
 let stream = await cameraService.startRunning()
 for await result in stream {
     if let corners = result.smoothedCorners {
-        // オーバーレイを更新
+        // Update overlay
         updateOverlay(corners: corners)
     }
     if result.shouldAutoCapture {
         let imageData = try await cameraService.captureFrame()
-        // 撮影完了
+        // Capture complete
     }
 }
 
-// カメラ停止
+// Stop camera
 await cameraService.stopRunning()
 ```
 
-#### カメラプリセット
+#### Camera Presets
 
 ```swift
-CameraConfiguration.receipt     // レシート（100mm幅、80%フィル）
-CameraConfiguration.bookPage    // 書籍ページ（200mm幅、90%フィル、高画質）
-CameraConfiguration.a4Document  // A4書類（210mm幅、90%フィル）
+CameraConfiguration.receipt     // Receipt (100mm width, 80% fill)
+CameraConfiguration.bookPage    // Book page (200mm width, 90% fill, high quality)
+CameraConfiguration.a4Document  // A4 document (210mm width, 90% fill)
 ```
 
-### 3. OCRテキスト認識
+### 3. OCR Text Recognition
 
 ```swift
 import DocumentOCR
 
-// 日本語+英語のOCRサービス
+// Japanese + English OCR service
 let ocrService = OCRServiceImpl(
     configuration: .japanese
 )
 
-// 画像データからテキスト認識
+// Recognize text from image data
 let result = try await ocrService.recognizeText(from: jpegData)
 print(result.text)
-print("信頼度: \(result.confidence ?? 0)")
+print("confidence: \(result.confidence ?? 0)")
 
-// CGImageからも認識可能
+// Also works with CGImage
 let result2 = try await ocrService.recognizeText(from: cgImage)
 ```
 
-#### OCRプリセット
+#### OCR Presets
 
 ```swift
-OCRConfiguration.japanese  // 日本語 + 英語、高精度モード
-OCRConfiguration.english   // 英語のみ、高精度モード
+OCRConfiguration.japanese  // Japanese + English, accurate mode
+OCRConfiguration.english   // English only, accurate mode
 ```
 
-#### カスタム設定
+#### Custom Configuration
 
 ```swift
 let config = OCRConfiguration(
-    recognitionLanguages: ["zh-Hans", "en-US"],  // 中国語 + 英語
-    recognitionLevel: .fast,                      // 高速モード
-    usesLanguageCorrection: false                  // 言語補正なし
+    recognitionLanguages: ["zh-Hans", "en-US"],  // Chinese + English
+    recognitionLevel: .fast,                      // Fast mode
+    usesLanguageCorrection: false                  // No language correction
 )
 ```
 
-### 4. ドキュメントレイアウト解析
+### 4. Document Layout Analysis
 
 ```swift
 import DocumentLayout
 
-// YOLOv12n-DocLayNetモデルでレイアウト解析
+// Layout analysis with the YOLOv12n-DocLayNet model
 let layoutService = try DocumentLayoutServiceImpl()
 
 let result = try await layoutService.analyze(cgImage)
 
-// 検出されたすべての要素
+// All detected elements
 for element in result.elements {
     print("\(element.category.rawValue): \(element.confidence)")
-    print("位置: \(element.boundingBox)")
+    print("position: \(element.boundingBox)")
 }
 
-// カテゴリ別フィルタリング
-let tables = result.tables      // テーブル要素
-let pictures = result.pictures  // 画像要素
+// Filter by category
+let tables = result.tables      // Table elements
+let pictures = result.pictures  // Image/figure elements
 let headers = result.elements(ofCategory: .sectionHeader)
 ```
 
-#### 検出カテゴリ（DocLayNet 11クラス）
+#### Detected Categories (DocLayNet 11 Classes)
 
-| カテゴリ | 説明 |
-|---------|------|
-| `caption` | キャプション |
-| `footnote` | 脚注 |
-| `formula` | 数式 |
-| `listItem` | リスト項目 |
-| `pageFooter` | ページフッター |
-| `pageHeader` | ページヘッダー |
-| `picture` | 画像・図 |
-| `sectionHeader` | セクション見出し |
-| `table` | テーブル |
-| `text` | テキスト段落 |
-| `title` | タイトル |
+| Category | Description |
+|----------|-------------|
+| `caption` | Caption |
+| `footnote` | Footnote |
+| `formula` | Formula |
+| `listItem` | List item |
+| `pageFooter` | Page footer |
+| `pageHeader` | Page header |
+| `picture` | Image / figure |
+| `sectionHeader` | Section header |
+| `table` | Table |
+| `text` | Text paragraph |
+| `title` | Title |
 
-#### 外部モデルの使用
+#### Using an External Model
 
 ```swift
-// カスタムモデルをコンパイルして使用
+// Compile a custom model and use it
 let compiledURL = try DocumentLayoutServiceImpl.compileModel(at: modelPackageURL)
 let service = try DocumentLayoutServiceImpl(
     compiledModelURL: compiledURL,
@@ -233,7 +234,7 @@ let service = try DocumentLayoutServiceImpl(
 )
 ```
 
-## アーキテクチャ
+## Architecture
 
 ```
 DocumentCamera ──depends──▶ DocumentDetection
@@ -241,35 +242,35 @@ DocumentCamera ──depends──▶ DocumentDetection
        │ AVCaptureSession          │ Vision framework
        │ AsyncStream               │ EMA smoothing
        ▼                           ▼
-  カメラ制御              矩形検出・安定性追跡
+  Camera control          Rectangle detection & tracking
 
 DocumentOCR                DocumentLayout
        │                           │
        │ Vision framework          │ CoreML (YOLOv12n)
        │ Multi-language            │ NMS post-processing
        ▼                           ▼
-  テキスト認識             レイアウト解析
+  Text recognition         Layout analysis
 ```
 
-## 要件
+## Requirements
 
 - iOS 17.0+ / macOS 14.0+
 - Swift 6.2+
 - Xcode 16.0+
 
-## ライセンス
+## License
 
-MIT License - 詳細は [LICENSE](LICENSE) を参照
+MIT License — see [LICENSE](LICENSE) for details.
 
-## 開発者向け情報
+## Developer Resources
 
-- [リリースプロセス](RELEASE_PROCESS.md) - 新バージョンをリリースする手順
-- [変更履歴](CHANGELOG.md) - 全バージョンの変更記録
+- [Release Process](RELEASE_PROCESS.md) — how to release a new version
+- [Changelog](CHANGELOG.md) — full version history
 
-## サポート
+## Support
 
-- [Issue報告](https://github.com/no-problem-dev/swift-document-scanner/issues)
-- [ディスカッション](https://github.com/no-problem-dev/swift-document-scanner/discussions)
+- [Issue Tracker](https://github.com/no-problem-dev/swift-document-scanner/issues)
+- [Discussions](https://github.com/no-problem-dev/swift-document-scanner/discussions)
 
 ---
 

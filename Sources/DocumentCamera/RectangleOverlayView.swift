@@ -2,9 +2,13 @@
 import DocumentDetection
 import SwiftUI
 
-/// SwiftUI overlay that draws detected document corners with stability indicator.
+/// 検出した書類の四隅と安定度インジケータを描画する SwiftUI オーバーレイ。
+///
+/// 安定度が 1.0 に達すると緑色の太枠を表示する。安定進行中は各コーナーに進捗サークルを表示する。
 public struct RectangleOverlayView: View {
+    /// Vision 座標系で表された四隅（0.0〜1.0、原点は左下）。
     public let corners: RectangleCorners
+    /// 安定度スコア（0.0〜1.0）。1.0 で自動キャプチャ条件達成。
     public let stability: Double
 
     public init(corners: RectangleCorners, stability: Double) {

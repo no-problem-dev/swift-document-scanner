@@ -1,10 +1,10 @@
 # ``DocumentDetection``
 
-Detect rectangular documents in camera frames and static images using the Vision framework, with EMA smoothing and stability tracking for auto-capture.
+Vision フレームワークを使用してカメラフレームおよび静止画像から矩形書類を検出し、EMA スムージングと安定性追跡による自動キャプチャをサポートする。
 
 ## Overview
 
-`DocumentDetection` processes live `CVPixelBuffer` frames from AVFoundation, applies exponential moving-average (EMA) corner smoothing, and tracks how long a rectangle has been stationary. When the rectangle stays stable for the configured ``DetectionConfiguration/stabilityThreshold``, ``FrameDetectionResult/shouldAutoCapture`` becomes `true`.
+`DocumentDetection` は AVFoundation からのライブ `CVPixelBuffer` フレームを処理し、指数移動平均（EMA）によるコーナースムージングを適用し、矩形の静止時間を追跡する。矩形が設定した ``DetectionConfiguration/stabilityThreshold`` の間安定すると、``FrameDetectionResult/shouldAutoCapture`` が `true` になる。
 
 ```swift
 import DocumentDetection
@@ -29,20 +29,20 @@ if let observation = service.detect(in: cgImage) {
 
 ## Topics
 
-### Configuration
+### 設定
 
 - ``DetectionConfiguration``
 
-### Detection
+### 検出
 
 - ``RectangleDetectionService``
 - ``RectangleDetectionServiceImpl``
 
-### Results
+### 結果
 
 - ``FrameDetectionResult``
 - ``RectangleCorners``
 
-### Utilities
+### ユーティリティ
 
 - ``PerspectiveCorrection``

@@ -1,14 +1,14 @@
 import Foundation
 
-/// Errors that can occur during document layout analysis.
+/// 書類レイアウト解析で発生するエラー。
 public enum LayoutError: Error, LocalizedError, Sendable {
-    /// The CoreML model could not be loaded.
+    /// CoreML モデルのロードに失敗した。
     case modelLoadFailed
-    /// The input image could not be processed.
+    /// 入力画像を処理できなかった。
     case invalidImage
-    /// The Vision request failed.
+    /// Vision リクエストが失敗した。
     case detectionFailed(String)
-    /// The CoreML model compilation failed.
+    /// CoreML モデルのコンパイルに失敗した。
     case modelCompilationFailed(String)
 
     public var errorDescription: String? {

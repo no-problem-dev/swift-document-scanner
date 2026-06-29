@@ -2,7 +2,7 @@
 import AVFoundation
 import SwiftUI
 
-/// UIViewRepresentable wrapper for AVCaptureSession preview.
+/// `AVCaptureSession` のプレビューを表示する `UIViewRepresentable` ラッパー。
 public struct CameraPreviewView: UIViewRepresentable {
     public let session: AVCaptureSession
 

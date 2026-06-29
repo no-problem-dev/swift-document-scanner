@@ -5,14 +5,15 @@ import Foundation
 import UIKit
 #endif
 
-/// Crops detected layout elements from source images.
+/// 書類レイアウト要素をソース画像から切り抜くユーティリティ。
 public enum LayoutCropper {
-    /// Crop a region from a CGImage using normalized coordinates (top-left origin).
+    /// 正規化座標（0.0〜1.0、原点: 左上）を使って CGImage から領域を切り抜く。
+    ///
     /// - Parameters:
-    ///   - cgImage: Source image to crop from.
-    ///   - boundingBox: Normalized bounding box (0.0-1.0, top-left origin).
-    ///   - padding: Extra padding ratio to add around the crop (0.0-1.0).
-    /// - Returns: Cropped CGImage, or nil if cropping fails.
+    ///   - cgImage: 切り抜き元のソース画像。
+    ///   - boundingBox: 正規化バウンディングボックス（0.0〜1.0、原点: 左上）。
+    ///   - padding: 切り抜き領域に加える追加パディング比率（0.0〜1.0）。デフォルトは 0.02。
+    /// - Returns: 切り抜いた CGImage。切り抜きに失敗した場合は nil。
     public static func crop(
         from cgImage: CGImage,
         boundingBox: CGRect,
@@ -44,7 +45,13 @@ public enum LayoutCropper {
     }
 
     #if canImport(UIKit)
-    /// Crop and return as PNG data.
+    /// 切り抜いた領域を PNG データとして返す。
+    ///
+    /// - Parameters:
+    ///   - cgImage: 切り抜き元のソース画像。
+    ///   - boundingBox: 正規化バウンディングボックス（0.0〜1.0、原点: 左上）。
+    ///   - padding: 追加パディング比率（0.0〜1.0）。デフォルトは 0.02。
+    /// - Returns: PNG 画像データ。切り抜きに失敗した場合は nil。
     public static func cropToPNG(
         from cgImage: CGImage,
         boundingBox: CGRect,
