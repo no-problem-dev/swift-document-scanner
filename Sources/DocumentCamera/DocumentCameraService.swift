@@ -11,6 +11,11 @@ import UIKit
 /// 矩形検出付きドキュメントスキャン用カメラサービス。
 public protocol DocumentCameraService: Sendable {
     /// プレビュー表示に使用する AVCaptureSession。
+    ///
+    /// **画面（`@MainActor`）へ渡して `CameraPreviewView` に載せるためのもの。**
+    /// このオブジェクトの設定変更（入力・出力の付け外し、開始・停止）はサービスの中だけで行い、
+    /// 受け取った側はプレビューに載せる以外のことをしない —— その前提で隔離の外へ出している
+    /// （実装側の `nonisolated(unsafe)` の注記を参照）。
     nonisolated var captureSession: AVCaptureSession { get }
 
     /// カメラセッションを開始し、検出結果を流す AsyncStream を返す。
@@ -42,7 +47,20 @@ public protocol DocumentCameraService: Sendable {
 public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     // MARK: - Properties
 
-    public nonisolated let captureSession = AVCaptureSession()
+    /// **意図的に隔離の外へ出している。**
+    ///
+    /// `AVCaptureSession` は Apple が `Sendable` を付けていないので、`nonisolated let` のままだと
+    /// 「非 Sendable な値を隔離の外へ出せない」として**利用側のビルドが落ちる**
+    /// （README の使用例 `CameraPreviewView(session: service.captureSession)` がそれ）。
+    ///
+    /// 安全だと言える根拠は、このセッションに対する**変更がすべてこの actor の中で直列化されている**こと
+    /// （`startRunning` / `stopRunning` / `configureSession` はいずれも actor 隔離）。
+    /// 外へ出た参照は `AVCaptureVideoPreviewLayer` に載せるためだけに使われ、これはメインスレッドから
+    /// 行う Apple の標準的な使い方。**受け取った側が設定を変えると、この前提が崩れる。**
+    ///
+    /// 検査を外している以上、壊れたことに気づく手段が要る → `CameraSessionHandoffTests` が
+    /// 利用側と同じ渡し方をコンパイルさせている。
+    public nonisolated(unsafe) let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let videoOutputQueue = DispatchQueue(label: "document.camera.videoOutput")
 

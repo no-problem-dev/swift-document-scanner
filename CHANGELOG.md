@@ -9,6 +9,22 @@
 
 なし
 
+## [0.5.1] - 2026-07-29
+
+### 修正
+- **`captureSession` を画面へ渡せなかった（利用側のビルドが落ちる）** - `nonisolated let` に置いた
+  非 Sendable な `AVCaptureSession` は Swift 6 の並行性検査で隔離の外へ出せず、
+  README の使用例 `CameraPreviewView(session: service.captureSession)` がそのまま
+  `non-Sendable type 'AVCaptureSession' ... cannot exit nonisolated context` で失敗していた。
+  `nonisolated(unsafe)` にし、安全と言える根拠（設定変更はすべて actor 内で直列化・
+  外へ出た参照はプレビューに載せるだけ）を型の側に明記した
+
+### 追加
+- **`CameraSessionHandoffTests`** - 利用側と同じ渡し方をコンパイルさせる回帰テスト
+- **CI に iOS ジョブ** - `DocumentCamera` は丸ごと `#if canImport(UIKit)` で、
+  **macOS 向けの `swift test` では 1 行もコンパイルされていなかった**。
+  このモジュールが CI で一度もビルドされない状態を解消する
+
 ## [0.5.0] - 2026-07-29
 
 ### 追加
@@ -86,7 +102,8 @@
   - プリセット設定（japanese、english）
 - **SwiftUIサポート** - CameraPreviewView、RectangleOverlayView
 
-[未リリース]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.0...HEAD
+[未リリース]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/0.4.0...v0.5.0
 [0.4.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.1...0.4.0
 [0.3.1]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.0...v0.3.1

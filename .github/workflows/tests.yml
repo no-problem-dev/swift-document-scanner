@@ -1,5 +1,11 @@
 # SSOT: swift-oss-doctor/templates/workflows/tests.yml
 # 全リポ共通のテストゲート。手編集せず distribute-workflows.sh で再配布する。
+#
+# ★このリポジトリだけ iOS ジョブを足してある（テンプレには無い）。
+#   DocumentCamera は丸ごと `#if canImport(UIKit)` なので、**macOS 向けの swift test では
+#   1 行もコンパイルされない**。実際 2026-07-29 に、利用側（ストックレーダー）の Xcode Cloud で
+#   アーカイブが落ちるまで Swift 6 の並行性エラーが誰にも見えなかった。
+#   再配布でこのジョブを消さないこと。消すならテンプレ側に同等のものを入れてから。
 name: Tests
 
 on:
@@ -51,3 +57,24 @@ jobs:
 
       - name: Run Tests
         run: swift test
+
+  test-ios:
+    name: iOS (xcodebuild test)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      # UIKit がある環境でしかコンパイルされない target（DocumentCamera）を実際に通す。
+      # ここが無いと、そのモジュールは CI で一度もビルドされない。
+      - name: Run Tests (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -scheme swift-document-scanner-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            | xcpretty || exit ${PIPESTATUS[0]}
