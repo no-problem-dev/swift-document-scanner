@@ -42,7 +42,7 @@ print(layout.tables) // retrieve table elements
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.3.1"))
+    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.5.0"))
 ]
 ```
 

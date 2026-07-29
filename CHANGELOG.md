@@ -7,6 +7,10 @@
 
 ## [未リリース]
 
+なし
+
+## [0.5.0] - 2026-07-29
+
 ### 追加
 - **`OCRLine`** - 認識できたかたまりを、テキスト・信頼度・位置（Vision の正規化座標）で 1 件ずつ表す型
 - **`OCRResult.lines`** - 上記の配列。`init(lines:)` から `text` と `confidence` を導出するので 3 つが食い違わない
@@ -82,7 +86,9 @@
   - プリセット設定（japanese、english）
 - **SwiftUIサポート** - CameraPreviewView、RectangleOverlayView
 
-[未リリース]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.1...HEAD
+[未リリース]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/0.4.0...v0.5.0
+[0.4.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.1...0.4.0
 [0.3.1]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.1.0...v0.2.0
