@@ -20,6 +20,9 @@ DerivedData/
 
 # Swift Package Manager
 .build/
+# xcodebuild の derivedDataPath をリポジトリ内に切ったときの生成物。
+# `.build/` だけだと `.build-ios` のような別名が漏れる（実際 v0.5.1 で 3,115 ファイル入れてしまった）。
+.build-*/
 .swiftpm/
 Package.resolved
 
