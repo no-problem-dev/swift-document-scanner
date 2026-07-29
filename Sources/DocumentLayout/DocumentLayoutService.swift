@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import CoreML
+import DocumentImaging
 import Foundation
 import os
 import Vision
@@ -101,10 +102,10 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     }
 
     public func analyze(imageData: Data) async throws -> LayoutResult {
-        guard let cgImage = createCGImage(from: imageData) else {
+        guard let decoded = DecodedImage(data: imageData) else {
             throw LayoutError.invalidImage
         }
-        return try await analyze(cgImage)
+        return try await analyze(decoded.cgImage)
     }
 
     // MARK: - Private — Inference
@@ -281,13 +282,6 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         return Float(intersectionArea / unionArea)
     }
 
-    // MARK: - Private — Image Utilities
-
-    private func createCGImage(from imageData: Data) -> CGImage? {
-        let ciContext = CIContext()
-        guard let ciImage = CIImage(data: imageData) else { return nil }
-        return ciContext.createCGImage(ciImage, from: ciImage.extent)
-    }
 }
 
 // MARK: - CGImage Extension

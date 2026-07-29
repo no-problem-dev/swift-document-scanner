@@ -67,8 +67,12 @@ Or in Xcode: File > Add Package Dependencies > enter the URL above.
 |--------|-------------|--------------|
 | **DocumentDetection** | Rectangle detection and stability tracking | Vision |
 | **DocumentCamera** | Camera control and live detection stream | DocumentDetection, AVFoundation |
-| **DocumentOCR** | Text recognition (multi-language) | Vision |
-| **DocumentLayout** | AI layout analysis (YOLOv12n) | CoreML, Vision |
+| **DocumentOCR** | Text recognition (multi-language) | Vision, DocumentImaging |
+| **DocumentLayout** | AI layout analysis (YOLOv12n) | CoreML, Vision, DocumentImaging |
+
+`DocumentImaging` is an internal target (not exported as a product). It decodes image data once and
+carries the EXIF orientation alongside the pixels, so OCR and layout analysis cannot drift apart on
+something that fails silently when you get it wrong.
 
 ## Usage
 
@@ -159,21 +163,39 @@ let ocrService = OCRServiceImpl(
     configuration: .japanese
 )
 
-// Recognize text from image data
+// Recognize text from image data (EXIF orientation is honored)
 let result = try await ocrService.recognizeText(from: jpegData)
 print(result.text)
 print("confidence: \(result.confidence ?? 0)")
 
-// Also works with CGImage
-let result2 = try await ocrService.recognizeText(from: cgImage)
+// Per-observation lines with position — needed whenever columns matter
+for line in result.lines {
+    print(line.text, line.confidence, line.boundingBox)
+}
+
+// Also works with CGImage (pass the orientation instead of rotating pixels)
+let result2 = try await ocrService.recognizeText(from: cgImage, orientation: .right)
 ```
+
+`result.text` joins every line with `\n`. That is convenient, but the join discards
+which observations sat side by side — on a receipt the item name and its price come back as
+**separate observations**, and the order of `request.results` is not the visual top-to-bottom
+order. Use `result.lines` whenever the column layout matters; pairing them up is left to the
+caller, because the right pairing differs per document type.
 
 #### OCR Presets
 
 ```swift
 OCRConfiguration.japanese  // Japanese + English, accurate mode
 OCRConfiguration.english   // English only, accurate mode
+OCRConfiguration.receipt   // Japanese + English, accurate, NO language correction, small print
 ```
+
+`.receipt` turns language correction **off** on purpose: receipt item names are written in
+half-width katakana shorthand (`ｱﾀｯｸZERO ﾂﾒｶｴ`), and correction rewrites them into dictionary
+words — the text still looks plausible, so the damage is invisible until you try to match the
+product. It also lowers `minimumTextHeight`, since thermal-printer text is smaller than the
+document-sized default Vision assumes.
 
 #### Custom Configuration
 
@@ -181,7 +203,8 @@ OCRConfiguration.english   // English only, accurate mode
 let config = OCRConfiguration(
     recognitionLanguages: ["zh-Hans", "en-US"],  // Chinese + English
     recognitionLevel: .fast,                      // Fast mode
-    usesLanguageCorrection: false                  // No language correction
+    usesLanguageCorrection: false,                // No language correction
+    minimumTextHeight: 0.01                       // nil leaves it to Vision
 )
 ```
 

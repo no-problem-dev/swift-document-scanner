@@ -36,4 +36,36 @@ struct OCRConfigurationTests {
         case .fast: Issue.record("Expected accurate level")
         }
     }
+
+    /// レシートの品名は半角カナの独自略記（`ｱﾀｯｸZERO ﾂﾒｶｴ`）で、言語補正をかけると
+    /// 辞書の語に寄って別物になる。**補正が入ったまま出荷されると、読めているのに
+    /// 商品を特定できない**という気づきにくい壊れ方をするので、ここで固定する。
+    @Test("Receipt preset disables language correction")
+    func receiptDisablesLanguageCorrection() {
+        #expect(OCRConfiguration.receipt.usesLanguageCorrection == false)
+    }
+
+    @Test("Receipt preset lowers the minimum text height for small print")
+    func receiptLowersMinimumTextHeight() throws {
+        let height = try #require(OCRConfiguration.receipt.minimumTextHeight)
+        // Vision の既定はおよそ 1/32（0.031）。感熱紙の印字はそれより小さい
+        #expect(height < 0.031)
+        #expect(height > 0)
+    }
+
+    @Test("Receipt preset reads Japanese and English, accurately")
+    func receiptLanguages() {
+        #expect(OCRConfiguration.receipt.recognitionLanguages == ["ja-JP", "en-US"])
+        switch OCRConfiguration.receipt.recognitionLevel {
+        case .accurate: break // expected
+        case .fast: Issue.record("Expected accurate level")
+        }
+    }
+
+    /// 既定は Vision に任せる。0 を入れると「下限なし」の指定になり、任せるのとは別の挙動になる。
+    @Test("Other presets leave minimumTextHeight to Vision")
+    func othersLeaveMinimumTextHeightNil() {
+        #expect(OCRConfiguration.japanese.minimumTextHeight == nil)
+        #expect(OCRConfiguration.english.minimumTextHeight == nil)
+    }
 }

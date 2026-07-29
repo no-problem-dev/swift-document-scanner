@@ -67,8 +67,12 @@ dependencies: [
 |-----------|------|------|
 | **DocumentDetection** | 矩形検出・安定性追跡 | Vision |
 | **DocumentCamera** | カメラ制御・ライブ検出ストリーム | DocumentDetection, AVFoundation |
-| **DocumentOCR** | テキスト認識（多言語） | Vision |
-| **DocumentLayout** | AIレイアウト解析（YOLOv12n） | CoreML, Vision |
+| **DocumentOCR** | テキスト認識（多言語） | Vision, DocumentImaging |
+| **DocumentLayout** | AIレイアウト解析（YOLOv12n） | CoreML, Vision, DocumentImaging |
+
+`DocumentImaging` は内部ターゲット（product として公開していない）。画像データを 1 回で開いて
+EXIF の向きを画素と一緒に運ぶ。**間違えると静かに壊れる**種類の処理なので、OCR とレイアウト解析で
+ずれないよう 1 箇所に寄せてある。
 
 ## 基本的な使い方
 
@@ -160,21 +164,37 @@ let ocrService = OCRServiceImpl(
     configuration: .japanese
 )
 
-// 画像データからテキスト認識
+// 画像データからテキスト認識（EXIF の向きは尊重される）
 let result = try await ocrService.recognizeText(from: jpegData)
 print(result.text)
 print("信頼度: \(result.confidence ?? 0)")
 
-// CGImageからも認識可能
-let result2 = try await ocrService.recognizeText(from: cgImage)
+// かたまりごとに位置つきで取れる。列の対応が要るときはこちら
+for line in result.lines {
+    print(line.text, line.confidence, line.boundingBox)
+}
+
+// CGImage からも認識可能（画素を回さず、向きを渡す）
+let result2 = try await ocrService.recognizeText(from: cgImage, orientation: .right)
 ```
+
+`result.text` は全部を改行で繋いだ文字列。手軽だが、**繋いだ時点で横並びの対応が失われる**。
+レシートでは品名と価格が別々の観測として返り、`request.results` の順序も見た目の上からの順とは
+限らない。列の対応が要るときは `result.lines` を使う。**対応付け自体はここではやらない** ——
+何が正しい組み方かは紙の種類ごとに違うため。
 
 #### OCRプリセット
 
 ```swift
 OCRConfiguration.japanese  // 日本語 + 英語、高精度モード
 OCRConfiguration.english   // 英語のみ、高精度モード
+OCRConfiguration.receipt   // 日本語 + 英語、高精度、言語補正なし、小さい印字向け
 ```
+
+`.receipt` が言語補正を切るのは意図的。レシートの品名は半角カナの独自略記（`ｱﾀｯｸZERO ﾂﾒｶｴ`）で
+書かれ、補正をかけると辞書の語に寄って別物になる。**文字列としては自然に見えるので、
+商品を特定しようとするまで壊れていることに気づけない**。あわせて `minimumTextHeight` を下げる ——
+感熱紙の印字は Vision が既定で想定する文書の文字より小さい。
 
 #### カスタム設定
 
@@ -182,7 +202,8 @@ OCRConfiguration.english   // 英語のみ、高精度モード
 let config = OCRConfiguration(
     recognitionLanguages: ["zh-Hans", "en-US"],  // 中国語 + 英語
     recognitionLevel: .fast,                      // 高速モード
-    usesLanguageCorrection: false                  // 言語補正なし
+    usesLanguageCorrection: false,                // 言語補正なし
+    minimumTextHeight: 0.01                       // nil なら Vision の既定値に任せる
 )
 ```
 
