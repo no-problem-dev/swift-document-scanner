@@ -27,18 +27,24 @@ public protocol DocumentLayoutService: Sendable {
     ///   a CoreML error from the prediction itself, which is not wrapped.
     func analyze(_ cgImage: CGImage) async throws -> LayoutResult
 
-    /// Analyses encoded image data.
+    /// Analyses encoded image data, honouring the orientation stored in the file.
     ///
-    /// **Only the pixels are used.** Orientation metadata is read while decoding and then
-    /// dropped, so a photo stored sideways — which is how cameras store them — is analysed
-    /// sideways. Straighten it yourself, or correct the perspective first, before passing a
-    /// camera image here.
+    /// **Orientation metadata in the data is respected** — photos from a camera store their
+    /// pixels unrotated and record the orientation separately, so a portrait photo would
+    /// otherwise be analysed lying on its side. The pixels are turned upright before the model
+    /// sees them, which is also what makes the boxes that come back mean what they look like:
+    /// they are in the frame of the upright page, so "the top" in the result is the top of the
+    /// page (see `DecodedImage.upright`).
+    ///
+    /// Unlike OCR, which hands Vision the orientation and lets it deal with it, this has to turn
+    /// the pixels: a CoreML pixel buffer carries pixels and nothing else.
     ///
     /// - Parameter imageData: JPEG, PNG, HEIC, or anything else ImageIO can open.
     /// - Returns: The regions found, sorted top to bottom.
-    /// - Throws: `LayoutError.invalidImage` when the data cannot be opened or cannot be redrawn
-    ///   into the model's input, `LayoutError.detectionFailed(_:)` when the output cannot be read
-    ///   as a tensor, or a CoreML error from the prediction itself, which is not wrapped.
+    /// - Throws: `LayoutError.invalidImage` when the data cannot be opened, cannot be turned
+    ///   upright, or cannot be redrawn into the model's input, `LayoutError.detectionFailed(_:)`
+    ///   when the output cannot be read as a tensor, or a CoreML error from the prediction
+    ///   itself, which is not wrapped.
     func analyze(imageData: Data) async throws -> LayoutResult
 }
 
@@ -136,10 +142,22 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     }
 
     public func analyze(imageData: Data) async throws -> LayoutResult {
-        guard let decoded = DecodedImage(data: imageData) else {
+        try await analyze(Self.uprightImage(from: imageData))
+    }
+
+    /// Opens the data and turns the pixels the way the file says they should be looked at.
+    ///
+    /// Taking `decoded.cgImage` here instead would be the silent failure `DocumentImaging` exists
+    /// to prevent: a camera photo would come back analysed sideways, with plausible-looking boxes
+    /// in a frame lying on its side, and nothing anywhere would say so.
+    static func uprightImage(from imageData: Data) throws -> CGImage {
+        guard
+            let decoded = DecodedImage(data: imageData),
+            let upright = decoded.upright
+        else {
             throw LayoutError.invalidImage
         }
-        return try await analyze(decoded.cgImage)
+        return upright
     }
 
     // MARK: - Private — Inference

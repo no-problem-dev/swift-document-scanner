@@ -12,10 +12,16 @@ import ImageIO
 /// grid, so they treat such an image as genuinely sideways — on something like a receipt, where
 /// the direction of the characters decides the outcome, that is the whole read failing.
 ///
-/// There are two ways to fix it, and this type takes **the one that passes the orientation
-/// along instead of rotating**. Vision accepts an orientation through
+/// There are two ways to fix it, and this type offers both. **Passing the orientation along is
+/// the cheaper one and the default**: Vision accepts an orientation through
 /// `VNImageRequestHandler(cgImage:orientation:options:)`, so nothing has to be turned — rotating
 /// costs memory and time, and re-encoding costs quality on top.
+///
+/// A consumer that has nowhere to put the orientation takes the other one, ``upright``, which
+/// turns the pixels. CoreML is such a consumer: an `MLFeatureValue` built from a pixel buffer
+/// carries pixels and nothing else, so an orientation held alongside them has no way in and is
+/// lost. Whichever of the two a caller needs, **neither is "ignore the orientation"** — that is
+/// the failure this type exists to prevent.
 ///
 /// ## How the data is opened
 ///
@@ -53,5 +59,94 @@ public struct DecodedImage {
 
         self.cgImage = image
         self.orientation = raw.flatMap(CGImagePropertyOrientation.init(rawValue:)) ?? .up
+    }
+}
+
+// MARK: - Turning the pixels
+
+extension DecodedImage {
+    /// The same picture with ``orientation`` applied to the pixels, so it can be looked at — or
+    /// measured — without carrying the orientation any further.
+    ///
+    /// This is for the consumers that have nowhere to put an orientation, CoreML above all: pixel
+    /// buffers carry pixels only. It is also what makes the geometry that comes back mean what it
+    /// looks like. A box reported against unrotated pixels is expressed in a frame lying on its
+    /// side, so "the top of the page" in the result is not the top of the page.
+    ///
+    /// Prefer handing ``orientation`` to whatever will read the image when it accepts one, as
+    /// Vision does: turning the pixels allocates a second image and costs a redraw.
+    ///
+    /// `.up` returns the original image untouched — there is nothing to turn, and copying it
+    /// would only cost memory.
+    ///
+    /// - Returns: The upright pixels, or `nil` when a bitmap context to redraw into cannot be
+    ///   made. **Nil is never the original image**: silently handing back sideways pixels is the
+    ///   bug this whole type exists to prevent, so the caller has to decide what to do.
+    public var upright: CGImage? {
+        Self.applying(orientation, to: cgImage)
+    }
+
+    /// Redraws `image` as though `orientation` had been applied to it.
+    ///
+    /// The eight cases are EXIF's, and each is one affine map from the stored pixel rectangle onto
+    /// the upright one — the four turns, and each of them mirrored. The quarter turns swap width
+    /// and height; the rest keep them.
+    ///
+    /// Interpolation is off: every case is a multiple of 90° with no scaling, so each source pixel
+    /// lands exactly on a destination pixel and resampling would only blur it.
+    static func applying(
+        _ orientation: CGImagePropertyOrientation,
+        to image: CGImage
+    ) -> CGImage? {
+        guard orientation != .up else { return image }
+
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+
+        let quarterTurned: Bool
+        switch orientation {
+        case .left, .leftMirrored, .right, .rightMirrored: quarterTurned = true
+        default: quarterTurned = false
+        }
+
+        // The transform maps the stored rectangle into the upright one, in CoreGraphics user
+        // space — y upwards, so the stored image's top edge sits at y = height.
+        let transform: CGAffineTransform
+        switch orientation {
+        case .up:
+            transform = .identity
+        case .upMirrored:
+            transform = CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: width, ty: 0)
+        case .down:
+            transform = CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: width, ty: height)
+        case .downMirrored:
+            transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height)
+        case .left:
+            transform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: height, ty: 0)
+        case .leftMirrored:
+            transform = CGAffineTransform(a: 0, b: -1, c: -1, d: 0, tx: height, ty: width)
+        case .right:
+            transform = CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: width)
+        case .rightMirrored:
+            transform = CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: 0, ty: 0)
+        @unknown default:
+            return nil
+        }
+
+        guard let context = CGContext(
+            data: nil,
+            width: quarterTurned ? image.height : image.width,
+            height: quarterTurned ? image.width : image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .none
+        context.concatenate(transform)
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        return context.makeImage()
     }
 }

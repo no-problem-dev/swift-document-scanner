@@ -55,7 +55,9 @@ let package = Package(
         ),
         .testTarget(
             name: "DocumentLayoutTests",
-            dependencies: ["DocumentLayout"]
+            // DocumentImaging is here so the orientation tests can build a photo the way a camera
+            // stores one — pixels lying down, orientation recorded beside them.
+            dependencies: ["DocumentLayout", "DocumentImaging"]
         ),
     ]
 )
