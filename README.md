@@ -78,7 +78,7 @@ API reference and guides, one site per module:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.5.0"))
+    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMinor(from: "0.5.0"))
 ]
 ```
 
