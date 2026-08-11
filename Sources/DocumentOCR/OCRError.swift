@@ -1,10 +1,10 @@
 import Foundation
 
-/// OCR 処理で発生するエラー。
+/// Failures that stop text recognition before it can return a result.
 public enum OCRError: Error, LocalizedError, Sendable {
-    /// 画像データの読み込みに失敗した。
+    /// The data could not be opened as an image at all, so nothing was recognised.
     case invalidImage
-    /// テキスト認識処理が失敗した。
+    /// Vision failed the request; the payload carries its own description of why.
     case recognitionFailed(String)
 
     public var errorDescription: String? {

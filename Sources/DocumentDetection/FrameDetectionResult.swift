@@ -1,14 +1,23 @@
 import Foundation
 
-/// 書類検出のための単一カメラフレームの処理結果。
+/// What one camera frame told the detector about the document in front of it.
 public struct FrameDetectionResult: Sendable {
-    /// UI 表示用の EMA スムージング済み四隅。矩形未検出時は nil。
+    /// The corners after smoothing, ready to draw, or nil when this frame held no usable document.
+    ///
+    /// Smoothing makes them lag the real edges slightly, which is the point: it keeps the outline
+    /// from jittering. They are meant for display rather than for cropping.
     public let smoothedCorners: RectangleCorners?
 
-    /// 矩形が静止している時間を示す安定度スコア（0.0〜1.0）。
+    /// How far the document has got towards firing the shutter, from 0 to 1.
+    ///
+    /// It only starts climbing once the corners have held still for the configured number of
+    /// consecutive frames, and it drops straight back to 0 on any frame that moves too far.
     public let stability: Double
 
-    /// 安定度のしきい値を超え、自動キャプチャを発動すべき状態かどうか。
+    /// Whether the document has now held still long enough for an automatic capture.
+    ///
+    /// It stays true on every stable frame after the first, so a caller that keeps consuming the
+    /// stream will see it repeatedly — stop the session or reset the detector after capturing.
     public let shouldAutoCapture: Bool
 
     public init(

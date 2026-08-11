@@ -5,25 +5,46 @@ import Vision
 
 // MARK: - Protocol
 
-/// Vision フレームワークを使用して画像内のテキストを認識するサービス。
+/// Reads printed text out of an image with Vision, keeping each chunk's position and confidence.
+///
+/// ## What the result does and does not promise
+///
+/// - **The languages are exactly the ones configured.** Automatic language detection is not
+///   enabled, so anything printed in a language outside the configured list is not read.
+/// - **The order is Vision's, not the page's.** Chunks are returned as Vision produced them and
+///   are never re-sorted here, so they may not run down the page. Sort by bounding box if the
+///   order matters.
+/// - **The text is returned as recognised.** Whitespace inside a chunk is untouched, and the
+///   only line breaks in the joined string are the ones inserted between chunks.
+/// - **Confidence is per chunk.** There is no per-word or per-character score, and the overall
+///   figure is an unweighted mean of the chunks.
+/// - **No layout is reconstructed.** Columns are not detected, tables are not turned into rows
+///   and cells, and headers are not separated from body text — for that, use DocumentLayout.
+/// - **Handwriting is not part of the contract.** Nothing here asks for it or checks for it;
+///   you get whatever Vision's text recogniser makes of the configured languages.
+/// - **An empty result is not an error.** A page Vision found nothing on comes back with no
+///   chunks, empty text and a nil confidence, exactly like a blank sheet would.
 public protocol OCRService: Sendable {
-    /// JPEG/PNG/HEIC 画像データからテキストを認識する。
+    /// Reads text from encoded image data, honouring the orientation stored in the file.
     ///
-    /// **データに向きのメタデータがあれば、それを尊重する**（カメラで撮った写真は
-    /// 画素を回さずに向きだけを立てて保存されるため。詳細は `DecodedImage`）。
+    /// **Orientation metadata in the data is respected** — photos from a camera store their
+    /// pixels unrotated and record the orientation separately, and reading it here is what stops
+    /// a portrait photo being read sideways (see `DecodedImage`).
     ///
-    /// - Parameter imageData: 画像データ。
-    /// - Returns: 認識できたかたまりと、全体の平均信頼度を含む `OCRResult`。
-    /// - Throws: `OCRError.invalidImage`（画像として開けない）、`OCRError.recognitionFailed(_:)`（Vision 認識失敗）。
+    /// - Parameter imageData: JPEG, PNG, HEIC, or anything else ImageIO can open.
+    /// - Returns: The recognised chunks, plus the mean confidence across them.
+    /// - Throws: `OCRError.invalidImage` when the data cannot be opened as an image, or
+    ///   `OCRError.recognitionFailed(_:)` when Vision fails the request.
     func recognizeText(from imageData: Data) async throws -> OCRResult
 
-    /// CGImage からテキストを認識する。
+    /// Reads text from already-decoded pixels, viewed at the orientation you name.
     ///
     /// - Parameters:
-    ///   - cgImage: 認識対象の画素。
-    ///   - orientation: その画素をどう見るべきか。**呼び出し側が回転させる必要はない**。
-    /// - Returns: 認識できたかたまりと、全体の平均信頼度を含む `OCRResult`。
-    /// - Throws: `OCRError.recognitionFailed(_:)`（Vision リクエスト失敗）。
+    ///   - cgImage: The pixels to read. They are handed to Vision as they are, never rotated.
+    ///   - orientation: How those pixels are meant to be viewed. Naming it is enough — **the
+    ///     caller does not have to rotate anything first**.
+    /// - Returns: The recognised chunks, plus the mean confidence across them.
+    /// - Throws: `OCRError.recognitionFailed(_:)` when the Vision request fails.
     func recognizeText(
         from cgImage: CGImage,
         orientation: CGImagePropertyOrientation
@@ -31,7 +52,9 @@ public protocol OCRService: Sendable {
 }
 
 extension OCRService {
-    /// 向きが分かっていない（または `.up` である）画素を読む。
+    /// Reads pixels that are already upright, or whose orientation is simply unknown.
+    ///
+    /// They are treated as `.up`, which is wrong for a photo straight out of a camera roll.
     public func recognizeText(from cgImage: CGImage) async throws -> OCRResult {
         try await recognizeText(from: cgImage, orientation: .up)
     }
@@ -39,7 +62,11 @@ extension OCRService {
 
 // MARK: - Implementation
 
-/// `VNRecognizeTextRequest` を使用するデフォルト OCR 実装。
+/// The default reader, backed by Vision's text recognition request.
+///
+/// Recognition runs synchronously inside the actor, so calls queue up behind one another rather
+/// than overlapping. Each call builds its own request from the configuration given at init, and
+/// the configuration cannot change afterwards.
 public actor OCRServiceImpl: OCRService {
     private let configuration: OCRConfiguration
 
@@ -70,8 +97,8 @@ public actor OCRServiceImpl: OCRService {
                     return
                 }
 
-                // 位置が取れるのはここだけ。捨てると、横に並んだ 2 つのかたまりを
-                // 対応付ける手がかりを呼び出し側が永久に失う（`OCRLine` の説明を参照）。
+                // This is the only place the position is available. Drop it and the caller loses,
+                // permanently, any way to pair up two chunks that sit side by side (see OCRLine).
                 let lines = observations.compactMap { observation -> OCRLine? in
                     guard let candidate = observation.topCandidates(1).first else { return nil }
                     return OCRLine(
@@ -92,8 +119,8 @@ public actor OCRServiceImpl: OCRService {
             }
             request.recognitionLanguages = configuration.recognitionLanguages
             request.usesLanguageCorrection = configuration.usesLanguageCorrection
-            // nil のときは触らない。0 を代入すると「下限なし」を指定したことになり、
-            // Vision の既定値に任せるのとは別の挙動になる。
+            // Leave the request alone when nil. Assigning 0 states "no lower bound", which is a
+            // different behaviour from letting Vision apply its own default.
             if let minimumTextHeight = configuration.minimumTextHeight {
                 request.minimumTextHeight = minimumTextHeight
             }

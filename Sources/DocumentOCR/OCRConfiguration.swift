@@ -1,32 +1,39 @@
 import Foundation
 
-/// OCR テキスト認識の設定。
+/// The settings applied to every text recognition request.
+///
+/// The presets below cover the kinds of paper this package was built for; construct a value
+/// directly only when none of them fits.
 public struct OCRConfiguration: Sendable {
-    /// 認識言語の優先度順リスト（例: ["ja-JP", "en-US"]）。
+    /// The languages to try, most preferred first, as identifiers such as `"ja-JP"`.
+    ///
+    /// Automatic language detection is left switched off, so this list is exhaustive: a language
+    /// that is not named here is not recognised at all, however clearly it is printed.
     public var recognitionLanguages: [String]
 
-    /// 認識精度レベル。
+    /// Which of Vision's two recognisers to run; every preset here uses the accurate one.
     public var recognitionLevel: RecognitionLevel
 
-    /// 認識後に言語補正処理を適用するかどうか。
+    /// Whether Vision may pull recognised strings towards real words after reading them.
     ///
-    /// 文章には効くが、**辞書に無い書き方をする紙では害になる**。補正は認識した文字列を
-    /// 語彙に寄せるので、レシートの半角カナの略記（`ｱﾀｯｸZERO ﾂﾒｶｴ`）や型番のような
-    /// 「正しい語ではないが、そう書いてある」文字列が、それらしい別の語に置き換わる。
+    /// It helps on prose and **does harm on paper that is not written in dictionary words**.
+    /// Correction moves the recognised string towards a vocabulary, so a shop's own half-width
+    /// katakana abbreviation on a receipt, or a model number — strings that are not proper words
+    /// but are what is actually printed — get swapped for a plausible different word.
     public var usesLanguageCorrection: Bool
 
-    /// 認識対象とする文字の最小の高さ。画像の高さに対する割合（0.0〜1.0）で、
-    /// `nil` なら Vision の既定値（画像の高さの 1/32 前後）に任せる。
+    /// The smallest character height to look for, as a fraction of the image height.
     ///
-    /// 既定値は文書を想定した大きさなので、**レシートのような小さい印字では行が丸ごと落ちる**。
-    /// 小さくすると拾える代わりに、ノイズも拾い、遅くなる。
+    /// Leave it nil to let Vision decide (its own default is around 1/32 of the image height).
+    /// That default assumes document-sized type, so **whole lines vanish on small print such as a
+    /// receipt**. Lowering it picks those lines up at the cost of more noise and more time.
     public var minimumTextHeight: Float?
 
-    /// 認識精度と速度のトレードオフ設定。
+    /// The accuracy-for-speed trade-off Vision makes while reading.
     public enum RecognitionLevel: Sendable {
-        /// 高精度・低速。
+        /// The slower, more accurate path, and the one every preset in this package uses.
         case accurate
-        /// 低精度・高速。
+        /// The quicker path, at lower accuracy.
         case fast
     }
 
@@ -46,24 +53,26 @@ public struct OCRConfiguration: Sendable {
 // MARK: - Presets
 
 extension OCRConfiguration {
-    /// 日本語 + 英語、高精度モード、言語補正あり。
+    /// Japanese with English behind it, read accurately, with language correction on.
     public static let japanese = OCRConfiguration(
         recognitionLanguages: ["ja-JP", "en-US"]
     )
 
-    /// 英語のみ、高精度モード、言語補正あり。
+    /// English alone, read accurately, with language correction on.
     public static let english = OCRConfiguration(
         recognitionLanguages: ["en-US"]
     )
 
-    /// レシート。日本語 + 英語、高精度モード、**言語補正なし**、小さい印字を拾う。
+    /// Receipts: Japanese and English, read accurately, **correction off**, small print picked up.
     ///
-    /// 補正を切るのは、レシートの品名が半角カナの独自略記で書かれるため（`ｷﾚｲｷﾚｲ ﾎｰﾑ 詰替`）。
-    /// 補正をかけると辞書の語に寄って別物になり、**あとから商品を特定できなくなる**。
-    /// 読めたままを返し、意味づけは呼び出し側に任せる。
+    /// Correction is off because item names on a receipt are written in the shop's own half-width
+    /// katakana abbreviations. With correction on they drift towards dictionary words and become
+    /// something else, and **the product can no longer be identified afterwards**. This preset
+    /// returns what was read and leaves the interpretation to the caller.
     ///
-    /// `minimumTextHeight` を既定より小さく取るのは、感熱紙の印字が文書より小さいから。
-    /// 検出とカメラの `.receipt` プリセットと組で使う。
+    /// The minimum text height is set below Vision's default because thermal-paper print is
+    /// smaller than document type. Use it with the receipt presets in DocumentDetection and
+    /// DocumentCamera.
     public static let receipt = OCRConfiguration(
         recognitionLanguages: ["ja-JP", "en-US"],
         recognitionLevel: .accurate,

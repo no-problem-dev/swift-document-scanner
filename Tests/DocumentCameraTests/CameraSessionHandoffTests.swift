@@ -4,21 +4,22 @@ import Testing
 @testable import DocumentCamera
 @testable import DocumentDetection
 
-/// カメラのセッションを**画面へ渡せること**を守る。
+/// Guards that the capture session **can still be handed to the screen**.
 ///
-/// ## なぜこのテストが要るのか
+/// ## Why this test exists
 ///
-/// `captureSession` は README の使用例そのもの（`CameraPreviewView(session: service.captureSession)`）で、
-/// **actor の外＝画面側から読む前提の API**。ところが Swift 6 の並行性検査では、
-/// `nonisolated let` に置いた非 Sendable な値を隔離の外へ出せない。
+/// `captureSession` is the README's usage example verbatim
+/// (`CameraPreviewView(session: service.captureSession)`), which means **it is an API meant to be
+/// read from outside the actor**. Swift 6's concurrency checking, though, will not let a
+/// non-Sendable value held in a `nonisolated let` cross out of the isolation.
 ///
-/// パッケージの中だけを見ていると気づけない —— 中では常に actor 自身の文脈から触るので通ってしまう。
-/// **落ちるのは利用側のビルドで、しかも iOS 向けにビルドしたときだけ**（macOS 向けの `swift build` では
-/// この行に到達しない書き方も多い）。実際、ストックレーダーで Xcode Cloud のアーカイブが落ちるまで
-/// 誰も気づかなかった。
+/// Looking only inside the package will never show this — in here the session is always touched
+/// from the actor's own context, so it compiles. **What breaks is the consumer's build, and only
+/// when building for iOS** (plenty of macOS-facing code never reaches that line at all). It went
+/// unnoticed until an Xcode Cloud archive failed.
 ///
-/// このテストは**利用側と同じ渡し方**を再現する。ここが通らなくなったら、README のとおりに書いた人の
-/// ビルドが壊れている。
+/// This test reproduces **the same hand-off a consumer writes**. If it stops compiling, so does
+/// the build of anyone who followed the README.
 @Suite("カメラのセッションを画面へ渡す")
 struct CameraSessionHandoffTests {
     private func makeService() -> DocumentCameraServiceImpl {
@@ -28,7 +29,7 @@ struct CameraSessionHandoffTests {
         )
     }
 
-    /// ★これがコンパイルできることが、このテストの本体。
+    /// The point of this test is that it compiles at all; the assertion is almost incidental.
     @MainActor
     @Test("画面（MainActor）から captureSession を受け取れる")
     func handsSessionToMainActor() {
@@ -37,7 +38,7 @@ struct CameraSessionHandoffTests {
         #expect(session.isRunning == false)
     }
 
-    /// protocol 越しでも同じように渡せること（具体型に依存しない使い方の担保）。
+    /// The same hand-off through the protocol, so callers that avoid the concrete type keep working.
     @MainActor
     @Test("protocol 越しでも渡せる")
     func handsSessionThroughProtocol() {

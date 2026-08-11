@@ -3,14 +3,23 @@ import CoreImage.CIFilterBuiltins
 import Foundation
 import Vision
 
-/// 検出された矩形の透視変換補正を行い、正面向きの書類画像を抽出するユーティリティ。
+/// Flattens a document photographed at an angle into a straight-on image of just that document.
 public enum PerspectiveCorrection {
-    /// 画像内の検出矩形に透視変換補正を適用する。
+    /// Warps the four detected corners onto a rectangle, straightening and cropping the page.
+    ///
+    /// **The result is a different size from the source.** Its dimensions come from the corrected
+    /// quadrilateral, so it is generally smaller than the frame it was cut from — the surroundings
+    /// are gone and the document has been resampled. The corner mapping also takes out the
+    /// rotation of the quadrilateral itself, so a page shot sideways comes back upright.
+    ///
+    /// **Orientation metadata is never consulted.** The pixels are used exactly as given, and the
+    /// normalised corners are read in the same bottom-left-origin space Core Image uses. Pass
+    /// pixels and corners that came from the same, unrotated image.
     ///
     /// - Parameters:
-    ///   - cgImage: 書類を含むソース画像。
-    ///   - observation: Vision が検出した矩形観察結果。
-    /// - Returns: 透視変換補正済み画像。補正に失敗した場合は nil。
+    ///   - cgImage: The image the document was detected in.
+    ///   - observation: The quadrilateral Vision found in that same image.
+    /// - Returns: The straightened document, or nil if Core Image could not render it.
     public static func correct(cgImage: CGImage, observation: VNRectangleObservation) -> CGImage? {
         let ciImage = CIImage(cgImage: cgImage)
         let imageSize = ciImage.extent.size

@@ -8,58 +8,95 @@ import UIKit
 
 // MARK: - Protocol
 
-/// 矩形検出付きドキュメントスキャン用カメラサービス。
+/// Runs the back camera and streams a document detection for every frame it produces.
+///
+/// **Available only where UIKit is, so not on macOS** — on macOS this module offers only its
+/// configuration and error types.
+///
+/// ## What it does not do
+///
+/// **Camera authorisation is never requested and never reported.** Starting without permission
+/// is silent: the call returns a stream, no frames arrive, nothing is ever yielded, and a capture
+/// throws ``CameraError/imageDataNotAvailable``. Ask for access yourself before starting, or a
+/// refusal looks exactly like a camera pointed at nothing.
+///
+/// A device with no back wide-angle camera fails the same silent way — configuration gives up
+/// part-way and the session produces nothing.
 public protocol DocumentCameraService: Sendable {
-    /// プレビュー表示に使用する AVCaptureSession。
+    /// The session to hand to the preview view, and the only thing it should be used for.
     ///
-    /// **画面（`@MainActor`）へ渡して `CameraPreviewView` に載せるためのもの。**
-    /// このオブジェクトの設定変更（入力・出力の付け外し、開始・停止）はサービスの中だけで行い、
-    /// 受け取った側はプレビューに載せる以外のことをしない —— その前提で隔離の外へ出している
-    /// （実装側の `nonisolated(unsafe)` の注記を参照）。
+    /// **It is meant to cross to the main actor and be attached to `CameraPreviewView`.**
+    /// Everything that mutates it — adding inputs and outputs, starting, stopping — happens
+    /// inside the service, and letting it out of the isolation is only sound while that stays
+    /// true (see the note on the implementation's `nonisolated(unsafe)` property).
     nonisolated var captureSession: AVCaptureSession { get }
 
-    /// カメラセッションを開始し、検出結果を流す AsyncStream を返す。
+    /// Starts the camera and returns a stream carrying one detection per frame.
     ///
-    /// 前のストリームが存在する場合は完了させてから新しいストリームを生成する。
+    /// Calling it again finishes the previous stream before making a new one, so only the newest
+    /// stream ever receives frames. The session is configured on the first call only.
+    ///
+    /// The stream never fails and never ends by itself; it finishes when the camera is stopped or
+    /// when this is called again.
     func startRunning() async -> AsyncStream<FrameDetectionResult>
 
-    /// カメラセッションを停止し、アクティブなストリームを完了させる。
+    /// Stops the camera and finishes the active stream, dropping the last frame it held.
+    ///
+    /// A capture attempted after this throws until the camera has been started again and a new
+    /// frame has arrived.
     func stopRunning() async
 
-    /// 矩形検出の安定性追跡状態をリセットする。
+    /// Restarts stability tracking without stopping the camera, as you would after a capture.
+    ///
+    /// Without it, the frames right after a capture still count as the same held-still document
+    /// and immediately meet the auto-capture condition again.
     func resetDetectionState() async
 
-    /// カメラのトーチを切り替え、変更後の有効状態を返す。
+    /// Turns the torch on or off and reports the state it now believes it is in.
     ///
-    /// - Returns: トーチがオンの場合 `true`、オフの場合 `false`。
+    /// - Returns: True when the torch is meant to be on. It is the service's own flag rather than
+    ///   the hardware's: it flips even on a device with no torch, and even when the device
+    ///   refuses the change.
     func toggleFlash() async -> Bool
 
-    /// 現在のビデオフレームを JPEG データとしてキャプチャする。
+    /// Encodes the most recent video frame as JPEG.
     ///
-    /// - Returns: JPEG 画像データ。
-    /// - Throws: フレームが利用できない場合は ``CameraError/imageDataNotAvailable``。
+    /// It is the frame the video output last delivered, not a fresh full-resolution still — there
+    /// is no photo output in this session, so the size is the session preset's and the quality is
+    /// whatever the configuration asked for.
+    ///
+    /// - Returns: JPEG data for that frame.
+    /// - Throws: ``CameraError/imageDataNotAvailable`` when no frame has arrived yet, or when the
+    ///   frame could not be rendered or encoded.
     func captureFrame() async throws -> Data
 }
 
 // MARK: - Implementation
 
-/// AVCaptureSession と DocumentDetection を使用するデフォルト実装。
+/// The default service, driving a capture session and detecting on the video output queue.
+///
+/// Detection runs synchronously inside the video output callback, on a private serial queue, so a
+/// slow detector costs frames rather than memory — the output is set to discard late frames. The
+/// video connection is pinned to portrait, so the frames detection and capture see do not rotate
+/// with the device.
 public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
     // MARK: - Properties
 
-    /// **意図的に隔離の外へ出している。**
+    /// The live session, held outside the actor's isolation so a view can take it.
     ///
-    /// `AVCaptureSession` は Apple が `Sendable` を付けていないので、`nonisolated let` のままだと
-    /// 「非 Sendable な値を隔離の外へ出せない」として**利用側のビルドが落ちる**
-    /// （README の使用例 `CameraPreviewView(session: service.captureSession)` がそれ）。
+    /// **This exemption from concurrency checking is deliberate.** Apple does not mark
+    /// `AVCaptureSession` as `Sendable`, so as a plain `nonisolated let` it cannot leave the
+    /// actor, and **consumers fail to build** — the README's
+    /// `CameraPreviewView(session: service.captureSession)` is exactly that line.
     ///
-    /// 安全だと言える根拠は、このセッションに対する**変更がすべてこの actor の中で直列化されている**こと
-    /// （`startRunning` / `stopRunning` / `configureSession` はいずれも actor 隔離）。
-    /// 外へ出た参照は `AVCaptureVideoPreviewLayer` に載せるためだけに使われ、これはメインスレッドから
-    /// 行う Apple の標準的な使い方。**受け取った側が設定を変えると、この前提が崩れる。**
+    /// It is sound because **every mutation of this session is serialised inside the actor**
+    /// (`startRunning`, `stopRunning`, `setupCameraSession` and `configureForScanning` are all
+    /// actor-isolated). The reference that escapes is used only to attach an
+    /// `AVCaptureVideoPreviewLayer`, which is Apple's own main-thread pattern.
+    /// **A consumer that changes the configuration invalidates all of that.**
     ///
-    /// 検査を外している以上、壊れたことに気づく手段が要る → `CameraSessionHandoffTests` が
-    /// 利用側と同じ渡し方をコンパイルさせている。
+    /// With the check switched off, something has to notice when the guarantee breaks:
+    /// `CameraSessionHandoffTests` compiles the same hand-off a consumer writes.
     public nonisolated(unsafe) let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let videoOutputQueue = DispatchQueue(label: "document.camera.videoOutput")
@@ -87,10 +124,14 @@ public actor DocumentCameraServiceImpl: NSObject, DocumentCameraService {
 
     // MARK: - Initialization
 
-    /// DocumentCameraServiceImpl を初期化する。
+    /// Creates a service around a detector you have already built.
     ///
-    /// - Parameter rectangleDetectionService: 外部で構築した矩形検出サービス。`RectangleDetectionServiceImpl` を使用する場合は呼び出し元で生成して渡す。
-    /// - Parameter configuration: フォーカス計算（最小被写体距離・ズーム係数）および JPEG 品質などのカメラ設定。省略時はデフォルト値を使用。
+    /// - Parameters:
+    ///   - rectangleDetectionService: The detector every frame is fed to. It is injected rather
+    ///     than created here so its thresholds and the camera's framing can be chosen together —
+    ///     the receipt presets in the two modules are meant to be used as a pair.
+    ///   - configuration: The document width and fill percentage the focus distance is worked out
+    ///     from, plus the JPEG quality of captures.
     public init(
         rectangleDetectionService: any RectangleDetectionService,
         configuration: CameraConfiguration = CameraConfiguration()

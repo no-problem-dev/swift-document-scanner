@@ -1,20 +1,25 @@
 import Foundation
 
-/// OCR テキスト認識の結果。
+/// Everything one recognition pass produced: the chunks, their joined text, and a mean confidence.
 public struct OCRResult: Sendable {
-    /// 認識されたテキスト全文（`lines` を改行で結合）。
+    /// Every recognised chunk joined with newlines, as a convenience where positions do not matter.
     ///
-    /// 位置の要らない用途のための便宜。**行ごとに扱うなら `lines` を使う** ——
-    /// この文字列は結合した時点で、対応関係と並びの信頼性を失っている（`OCRLine` の説明を参照）。
+    /// **Work from `lines` when the layout matters** — joining is the step that destroys the
+    /// pairing between chunks and any confidence in their order (see `OCRLine`). No whitespace or
+    /// line-break normalisation is applied: the chunks appear exactly as Vision returned them.
     public let text: String
 
-    /// 全認識結果の平均信頼度（0.0〜1.0）。テキストが検出されなかった場合は nil。
+    /// The unweighted mean of every chunk's confidence, or nil when nothing was recognised.
+    ///
+    /// A long paragraph and a two-character fragment count the same, so one confidently read
+    /// scrap can lift the average of a page that otherwise went badly.
     public let confidence: Float?
 
-    /// 認識できたかたまりを、位置と信頼度つきで 1 件ずつ。
+    /// Each recognised chunk in the order Vision returned it, with its own position and confidence.
     public let lines: [OCRLine]
 
-    /// 観測から組み立てる。`text` と `confidence` は `lines` から導出するので、3 つが食い違わない。
+    /// Builds a result from observations, deriving the joined text and the mean confidence from
+    /// them so the three cannot contradict each other.
     public init(lines: [OCRLine]) {
         self.lines = lines
         self.text = lines.map(\.text).joined(separator: "\n")
@@ -23,7 +28,11 @@ public struct OCRResult: Sendable {
             : lines.reduce(Float(0)) { $0 + $1.confidence } / Float(lines.count)
     }
 
-    /// 値を直に組む（テストや、行を持たない結果を作るとき）。
+    /// Builds a result from values that are already known, for tests and for results that carry
+    /// no per-chunk detail.
+    ///
+    /// Nothing is derived here, so the text and the confidence are never checked against the
+    /// chunks and may disagree with them.
     public init(text: String, confidence: Float?, lines: [OCRLine] = []) {
         self.text = text
         self.confidence = confidence

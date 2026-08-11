@@ -1,29 +1,37 @@
 import CoreGraphics
 import Foundation
 
-/// 認識できたテキストの 1 かたまり（Vision の観測 1 件）。
+/// One chunk of recognised text — a single Vision observation — with where it sat on the page.
 ///
-/// ## なぜ全文の文字列だけでは足りないのか
+/// ## Why the joined string alone is not enough
 ///
-/// Vision が返すのは「レイアウト上のひとまとまり」であって、人が見て 1 行だと思うものとは限らない。
-/// レシートのように **品名と価格が横に離れて並ぶ**紙では、その 2 つは別々の観測として返る。
-/// 全部を改行で繋いだ 1 本の文字列にしてしまうと、
+/// What Vision returns is a cluster of the layout, which is not necessarily what a person would
+/// call a line. On paper where **the item name and the price sit far apart on the same row**,
+/// such as a receipt, the two come back as separate observations. Join everything into one
+/// newline-separated string and two things are gone:
 ///
-/// - どの品名にどの価格が対応するのかが分からなくなる
-/// - **並び順も当てにならない**（観測の順序は、見た目の上から順とは限らない）
+/// - which price belongs to which item name
+/// - **the order itself** — observations do not necessarily arrive in the order they appear on
+///   the page
 ///
-/// 位置を持っておけば、呼び出し側が用途に合わせて並べ替えたり列を対応付けたりできる。
-/// **その対応付け自体はここではやらない** —— 何が正しい組み方かは紙の種類ごとに違い、
-/// レシートの都合を汎用の読み取りに持ち込むと使い道が狭くなる。
+/// Keeping the position lets the caller re-sort them or pair up columns however the job needs.
+/// **That pairing is deliberately not done here**: what counts as a correct pairing differs from
+/// one kind of paper to the next, and building a receipt's rules into a general-purpose reader
+/// would narrow what it is good for.
 public struct OCRLine: Sendable, Equatable {
-    /// 認識されたテキスト（最有力候補）。
+    /// The recognised string — Vision's leading candidate, with the alternatives discarded here.
     public let text: String
 
-    /// この 1 件の信頼度（0.0〜1.0）。
+    /// Vision's confidence in this one observation, from 0 to 1, not a per-word or per-character
+    /// score.
     public let confidence: Float
 
-    /// 画像内での位置。**Vision の正規化座標**で、原点は左下・幅も高さも 0〜1。
-    /// 画像の大きさに依らないので、縮小した画像で読んでも同じ値になる。
+    /// Where the chunk sits, in **Vision's normalised coordinates**: origin at the bottom left,
+    /// width and height both running 0 to 1.
+    ///
+    /// Being independent of pixel size, the values come out the same whether the image was read
+    /// at full size or scaled down. Note that the origin is the opposite of SwiftUI's and UIKit's,
+    /// so drawing these means flipping y.
     public let boundingBox: CGRect
 
     public init(text: String, confidence: Float, boundingBox: CGRect) {

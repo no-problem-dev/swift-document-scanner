@@ -5,7 +5,8 @@ import Testing
 import UniformTypeIdentifiers
 @testable import DocumentImaging
 
-/// 1×1 の不透明な画素を 1 枚作る。中身は問われないので色は何でもよい。
+/// Makes one opaque image, 4×8 by default. The colour never matters; the non-square shape does,
+/// because it is what makes an accidental rotation visible.
 private func makeCGImage(width: Int = 4, height: Int = 8) -> CGImage {
     let context = CGContext(
         data: nil,
@@ -21,7 +22,7 @@ private func makeCGImage(width: Int = 4, height: Int = 8) -> CGImage {
     return context.makeImage()!
 }
 
-/// 指定した向きのメタデータを持つ JPEG を書き出す。orientation が nil ならメタデータを付けない。
+/// Writes a JPEG carrying the given orientation metadata, or none at all when it is nil.
 private func makeJPEG(orientation: CGImagePropertyOrientation?) -> Data {
     let data = NSMutableData()
     let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil)!
@@ -36,8 +37,9 @@ private func makeJPEG(orientation: CGImagePropertyOrientation?) -> Data {
 
 @Suite("DecodedImage Tests")
 struct DecodedImageTests {
-    /// ★これが今回いちばん静かに壊れていたところ。カメラで撮った写真は画素を回さずに
-    /// 向きだけを立てて保存されるので、読み落とすと横倒しのまま Vision にかかる。
+    /// This is where things were breaking most quietly. A camera stores its pixels unrotated and
+    /// records the orientation separately, so missing that metadata sends a sideways image to
+    /// Vision with nothing to indicate anything went wrong.
     @Test(
         "EXIF の向きを読む",
         arguments: [
@@ -62,8 +64,8 @@ struct DecodedImageTests {
 
     @Test("画素は向きを適用せずそのまま返す（回転はしない）")
     func doesNotRotatePixels() throws {
-        // .right は「90 度回して見る」指示。画素そのものは 4×8 のまま来るべきで、
-        // ここが 8×4 になっていたら、どこかで回してしまっている。
+        // .right says "view this turned 90 degrees". The pixels themselves should still arrive as
+        // 4×8; 8×4 here would mean something rotated them on the way in.
         let decoded = try #require(DecodedImage(data: makeJPEG(orientation: .right)))
         #expect(decoded.cgImage.width == 4)
         #expect(decoded.cgImage.height == 8)

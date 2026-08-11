@@ -1,26 +1,48 @@
 import Foundation
 
-/// 矩形検出の動作設定。
+/// The thresholds that decide which detections count and when one has held still long enough.
 public struct DetectionConfiguration: Sendable {
-    /// 自動キャプチャが発動するまでに矩形が安定し続ける必要がある時間（秒）。
+    /// How long the document must hold still, in seconds, before an automatic capture fires.
+    ///
+    /// The initialiser traps on anything that is not greater than zero.
     public var stabilityThreshold: TimeInterval
 
-    /// 「安定」とみなす最大コーナー移動量（0.0〜1.0 正規化座標）。
+    /// How far a corner may drift between frames and still count as still, in normalised units.
+    ///
+    /// It is checked per axis against all four corners, so one corner moving further than this on
+    /// either x or y throws away the stability built up so far.
     public var positionThreshold: CGFloat
 
-    /// 安定タイマーを開始するまでに必要な連続安定フレーム数。
+    /// How many consecutive still frames must pass before the stability clock even starts.
+    ///
+    /// It filters out momentary coincidences: the seconds counted against the stability threshold
+    /// begin only after this many frames in a row have qualified.
     public var minimumStableFrameCount: Int
 
-    /// フレーム全体の書類として除外する矩形の最大面積比率。
+    /// The largest share of the frame a detection may cover before it is thrown away.
+    ///
+    /// A quadrilateral filling almost the whole frame is usually the frame itself, or the desk,
+    /// rather than a document. The area is the shoelace area of the four corners.
     public var maximumRectangleAreaRatio: CGFloat
 
-    /// 有効な矩形の端からの最小マージン（0.0〜0.5）。
+    /// How far every corner must stay clear of the frame edges, in normalised units.
+    ///
+    /// A document touching the edge is probably cropped, so a single corner inside this margin
+    /// rejects the whole detection.
     public var minimumEdgeMargin: CGFloat
 
-    /// 有効な検出とみなす Vision の最小信頼度（0.0〜1.0）。
+    /// The lowest confidence Vision may report for a detection to be used at all.
+    ///
+    /// It is the segmentation request's own score for the whole shape, not a per-corner value.
+    /// Anything below is discarded and reported as no document at all, so raising it makes the
+    /// outline disappear rather than wobble.
     public var minimumConfidence: Float
 
-    /// EMA スムージング係数（0.0 = 最大平滑化、1.0 = スムージングなし）。
+    /// How much weight the newest frame gets when smoothing the drawn corners, from 0 to 1.
+    ///
+    /// At 1 the new corners are used as they are; lower values keep more of the previous position
+    /// and move the outline more slowly. **It affects only the corners handed back for display**
+    /// — stability is always judged on the raw detection.
     public var smoothingFactor: CGFloat
 
     public init(
@@ -46,7 +68,7 @@ public struct DetectionConfiguration: Sendable {
 // MARK: - Presets
 
 extension DetectionConfiguration {
-    /// 一般的な書類スキャン向けデフォルト設定。
+    /// General document scanning: two seconds of stillness, nothing over 85% of the frame.
     public static let `default` = DetectionConfiguration(
         stabilityThreshold: 2.0,
         positionThreshold: 0.03,
@@ -57,7 +79,10 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// レシート（縦長の狭い書類）向け最適化設定。
+    /// Receipts — tall, narrow paper. The values are currently identical to the general ones.
+    ///
+    /// It exists as a separate name so the receipt path can be tuned without moving the default
+    /// underneath everything else. Choosing it today changes nothing about detection.
     public static let receipt = DetectionConfiguration(
         stabilityThreshold: 2.0,
         positionThreshold: 0.03,
@@ -68,7 +93,11 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// 書籍ページ（大きな書類、高速キャプチャ）向け最適化設定。
+    /// Book pages: fires sooner than the default and lets a page fill almost the whole frame.
+    ///
+    /// Stillness is required for 1.5 seconds over 6 frames, up to 95% of the frame is allowed,
+    /// and the confidence floor drops to 0.4 because a bound page has a softer edge than a
+    /// loose sheet.
     public static let bookPage = DetectionConfiguration(
         stabilityThreshold: 1.5,
         positionThreshold: 0.04,
@@ -79,7 +108,10 @@ extension DetectionConfiguration {
         smoothingFactor: 0.3
     )
 
-    /// 見開きページスキャン向け最適化設定（緩やかな検出・広いエッジ許容範囲）。
+    /// Two-page spreads: the most permissive set, for paper that runs right to the frame edge.
+    ///
+    /// 1.2 seconds of stillness, up to 98% of the frame, corners allowed within 0.5% of the edge,
+    /// and confidence down to 0.3. Expect more false detections in return.
     public static let bookSpread = DetectionConfiguration(
         stabilityThreshold: 1.2,
         positionThreshold: 0.05,

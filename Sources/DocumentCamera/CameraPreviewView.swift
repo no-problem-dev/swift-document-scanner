@@ -2,7 +2,14 @@
 import AVFoundation
 import SwiftUI
 
-/// `AVCaptureSession` のプレビューを表示する `UIViewRepresentable` ラッパー。
+/// Puts a capture session's live preview on screen, filled to the view and cropped at the edges.
+///
+/// **Available only where UIKit is, so not on macOS.** The layer is a capture preview layer built
+/// by SwiftUI on the main actor, and the session handed in is only ever read here — this view
+/// never starts, stops, or reconfigures it.
+///
+/// The preview fills the view and crops whatever does not fit, which means what the user sees is
+/// not the whole frame that detection and capture work on.
 public struct CameraPreviewView: UIViewRepresentable {
     public let session: AVCaptureSession
 

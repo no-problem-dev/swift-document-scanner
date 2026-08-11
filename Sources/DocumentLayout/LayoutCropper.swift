@@ -5,15 +5,24 @@ import Foundation
 import UIKit
 #endif
 
-/// 書類レイアウト要素をソース画像から切り抜くユーティリティ。
+/// Cuts detected regions out of the image they were found in.
 public enum LayoutCropper {
-    /// 正規化座標（0.0〜1.0、原点: 左上）を使って CGImage から領域を切り抜く。
+    /// Cuts a normalised, top-left-origin region out of an image, with a margin around it.
+    ///
+    /// **The padding is a fraction of the whole image, not of the region**, and is added to every
+    /// side, so the same value grows a small region proportionally far more than a large one.
+    /// A padded region that runs past the right or bottom edge is clipped to the image rather
+    /// than shifted back inside, so the result can be smaller than the padding implies.
+    ///
+    /// Anything that works out smaller than 20×20 pixels is refused rather than returned, which
+    /// keeps unusable slivers out of the caller's hands.
     ///
     /// - Parameters:
-    ///   - cgImage: 切り抜き元のソース画像。
-    ///   - boundingBox: 正規化バウンディングボックス（0.0〜1.0、原点: 左上）。
-    ///   - padding: 切り抜き領域に加える追加パディング比率（0.0〜1.0）。デフォルトは 0.02。
-    /// - Returns: 切り抜いた CGImage。切り抜きに失敗した場合は nil。
+    ///   - cgImage: The image the region was measured against. A different image, or the same one
+    ///     rotated since, silently crops the wrong place.
+    ///   - boundingBox: The region to cut, normalised 0 to 1 with the origin at the top left.
+    ///   - padding: Extra margin on each side, as a fraction of the image.
+    /// - Returns: The cropped image, or nil when it would be too small or lies outside the image.
     public static func crop(
         from cgImage: CGImage,
         boundingBox: CGRect,
@@ -45,13 +54,16 @@ public enum LayoutCropper {
     }
 
     #if canImport(UIKit)
-    /// 切り抜いた領域を PNG データとして返す。
+    /// Crops the same way and encodes the result as PNG.
+    ///
+    /// PNG keeps the crop lossless, which matters when it is going straight back into text
+    /// recognition. **Available only where UIKit is, so not on macOS** — the encoder is UIKit's.
     ///
     /// - Parameters:
-    ///   - cgImage: 切り抜き元のソース画像。
-    ///   - boundingBox: 正規化バウンディングボックス（0.0〜1.0、原点: 左上）。
-    ///   - padding: 追加パディング比率（0.0〜1.0）。デフォルトは 0.02。
-    /// - Returns: PNG 画像データ。切り抜きに失敗した場合は nil。
+    ///   - cgImage: The image the region was measured against.
+    ///   - boundingBox: The region to cut, normalised 0 to 1 with the origin at the top left.
+    ///   - padding: Extra margin on each side, as a fraction of the image.
+    /// - Returns: PNG data, or nil when the crop was refused or the encoding failed.
     public static func cropToPNG(
         from cgImage: CGImage,
         boundingBox: CGRect,

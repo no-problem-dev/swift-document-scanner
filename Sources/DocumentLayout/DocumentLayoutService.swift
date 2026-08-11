@@ -8,28 +8,51 @@ import Vision
 
 // MARK: - Protocol
 
-/// 画像内の書類レイアウト要素（テキスト・図・テーブルなど）を検出するサービス。
+/// Finds where the parts of a page are — text blocks, figures, tables — and labels each one.
+///
+/// A bundled CoreML model does the work, so nothing leaves the device. It locates and labels
+/// regions and nothing more: **no text is read, no table is broken into rows and cells, and no
+/// reading order is worked out** beyond sorting the regions down the page.
 public protocol DocumentLayoutService: Sendable {
-    /// CGImage から書類レイアウトを解析する。
+    /// Analyses already-decoded pixels, exactly as they are.
     ///
-    /// - Parameter cgImage: 解析対象の CGImage。
-    /// - Returns: 垂直位置（上から下）でソート済みの `LayoutResult`。
-    /// - Throws: `LayoutError.invalidImage`（画像のリサイズ失敗）、`LayoutError.detectionFailed(_:)`（モデル推論失敗）。
+    /// The image is stretched into the model's square input, so its aspect ratio need not be
+    /// anything in particular — but its rotation does matter: pixels that are not upright are
+    /// analysed sideways, and the labels come back accordingly wrong.
+    ///
+    /// - Parameter cgImage: The page to analyse.
+    /// - Returns: The regions found, sorted top to bottom.
+    /// - Throws: `LayoutError.invalidImage` when the image cannot be redrawn into the model's
+    ///   input, `LayoutError.detectionFailed(_:)` when the output cannot be read as a tensor, or
+    ///   a CoreML error from the prediction itself, which is not wrapped.
     func analyze(_ cgImage: CGImage) async throws -> LayoutResult
 
-    /// JPEG/PNG 画像データから書類レイアウトを解析する。
+    /// Analyses encoded image data.
     ///
-    /// - Parameter imageData: JPEG または PNG 形式の画像データ。
-    /// - Returns: 垂直位置（上から下）でソート済みの `LayoutResult`。
-    /// - Throws: `LayoutError.invalidImage`（Data → CGImage 変換失敗またはリサイズ失敗）、`LayoutError.detectionFailed(_:)`（モデル推論失敗）。
+    /// **Only the pixels are used.** Orientation metadata is read while decoding and then
+    /// dropped, so a photo stored sideways — which is how cameras store them — is analysed
+    /// sideways. Straighten it yourself, or correct the perspective first, before passing a
+    /// camera image here.
+    ///
+    /// - Parameter imageData: JPEG, PNG, HEIC, or anything else ImageIO can open.
+    /// - Returns: The regions found, sorted top to bottom.
+    /// - Throws: `LayoutError.invalidImage` when the data cannot be opened or cannot be redrawn
+    ///   into the model's input, `LayoutError.detectionFailed(_:)` when the output cannot be read
+    ///   as a tensor, or a CoreML error from the prediction itself, which is not wrapped.
     func analyze(imageData: Data) async throws -> LayoutResult
 }
 
 // MARK: - Implementation
 
-/// YOLOv12-DocLayNet CoreML モデルを使用するデフォルト実装。
+/// The default implementation, running a bundled YOLOv12-DocLayNet model through CoreML.
 ///
-/// Swift 側でテンソル推論・信頼度フィルタリング・クラス別 NMS 後処理を行う（モデル自体は NMS なし）。
+/// **The model itself suppresses nothing**, so decoding the raw tensor, applying the score floor,
+/// and merging overlapping boxes per class all happen here in Swift. Both of the tensor layouts
+/// the exporter produces are handled; a shape that is neither is logged and yields no regions
+/// rather than failing.
+///
+/// CoreML is left free to use every compute unit, so it will pick up the Neural Engine where
+/// there is one. Being an actor, analyses queue up rather than running side by side.
 public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     private let configuration: LayoutConfiguration
     private let mlModel: MLModel
@@ -55,7 +78,10 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         10: .title,
     ]
 
-    /// バンドル済み YOLOv12n モデルで初期化する。
+    /// Loads the nano model that ships with this package.
+    ///
+    /// - Throws: `LayoutError.modelLoadFailed` when the resource is missing from the bundle, or a
+    ///   CoreML error when the file is there but will not load.
     public init(configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
 
@@ -71,9 +97,14 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         self.mlModel = try MLModel(contentsOf: modelURL, configuration: mlConfig)
     }
 
-    /// 外部提供のコンパイル済みモデルで初期化する。
+    /// Loads a compiled model you supply, for the larger sizes that do not ship here.
     ///
-    /// ``compileModel(at:)`` で `.mlpackage` をコンパイルしてから渡す。
+    /// The URL must point at a compiled model, not at a model package — compile one first with
+    /// ``compileModel(at:)``. **The output is assumed to carry DocLayNet's eleven classes in the
+    /// standard order**: a model trained on anything else decodes into the wrong categories
+    /// without reporting anything wrong.
+    ///
+    /// - Throws: A CoreML error when the model will not load.
     public init(compiledModelURL: URL, configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
 
@@ -83,11 +114,14 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         self.mlModel = try MLModel(contentsOf: compiledModelURL, configuration: mlConfig)
     }
 
-    /// `.mlpackage` を ``init(compiledModelURL:configuration:)`` で使えるコンパイル済みモデルに変換する。
+    /// Compiles a model package into the form ``init(compiledModelURL:configuration:)`` accepts.
     ///
-    /// - Parameter packageURL: `.mlpackage` ディレクトリの URL。
-    /// - Returns: コンパイル済み `.mlmodelc` ディレクトリの URL。
-    /// - Throws: コンパイルに失敗した場合は ``LayoutError/modelCompilationFailed(_:)``。
+    /// CoreML writes the result to a temporary location, so move it somewhere you control if it
+    /// has to outlive the process — compiling on every launch is slow.
+    ///
+    /// - Parameter packageURL: The URL of the model package directory.
+    /// - Returns: The URL of the compiled model directory.
+    /// - Throws: ``LayoutError/modelCompilationFailed(_:)`` when compilation fails.
     public static func compileModel(at packageURL: URL) throws -> URL {
         do {
             return try MLModel.compileModel(at: packageURL)

@@ -1,14 +1,23 @@
 import Foundation
 
-/// 書類レイアウト解析で発生するエラー。
+/// The failures layout analysis reports.
+///
+/// They do not cover everything that can go wrong: CoreML's own load and prediction errors are
+/// passed through untouched rather than wrapped in one of these cases.
 public enum LayoutError: Error, LocalizedError, Sendable {
-    /// CoreML モデルのロードに失敗した。
+    /// The bundled model file was not found among the package resources.
+    ///
+    /// It means the resource is missing from the build, not that CoreML rejected the model —
+    /// a model that is present but unloadable surfaces as a CoreML error instead.
     case modelLoadFailed
-    /// 入力画像を処理できなかった。
+    /// The image could not be redrawn into the square buffer the model takes as input.
     case invalidImage
-    /// Vision リクエストが失敗した。
+    /// The model ran, but its output could not be read as a tensor.
+    ///
+    /// The payload names what was missing. A failure inside the prediction itself does not come
+    /// back as this case.
     case detectionFailed(String)
-    /// CoreML モデルのコンパイルに失敗した。
+    /// Turning a model package into a loadable compiled model failed; the payload says why.
     case modelCompilationFailed(String)
 
     public var errorDescription: String? {

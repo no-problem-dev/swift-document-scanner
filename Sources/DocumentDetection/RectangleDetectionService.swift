@@ -15,7 +15,8 @@ extension RectangleCorners {
         )
     }
 
-    /// 新しい観察結果との指数移動平均スムージングを適用する。
+    /// Blends a new observation into these corners with an exponential moving average, where the
+    /// factor is the weight given to the new observation.
     func smoothed(with observation: VNRectangleObservation, factor alpha: CGFloat) -> RectangleCorners {
         func smooth(_ current: CGPoint, _ previous: CGPoint) -> CGPoint {
             CGPoint(
@@ -34,21 +35,41 @@ extension RectangleCorners {
 
 // MARK: - Protocol
 
-/// カメラフレームおよび静止画像から書類の矩形を検出するサービス。
+/// Finds the outline of a document, both in a live camera stream and in a single still.
+///
+/// The two entry points differ in more than the input type: the streaming one carries state
+/// across frames — smoothing and stillness — while the still one remembers nothing.
 public protocol RectangleDetectionService: AnyObject, Sendable {
-    /// カメラフレームを EMA スムージングと安定性追跡付きで処理する。
+    /// Runs detection on one camera frame, updating the smoothing and the stability clock.
+    ///
+    /// A frame with no usable document throws away everything accumulated so far, so stability
+    /// restarts from zero rather than picking up where it left off.
     func process(_ pixelBuffer: CVPixelBuffer) -> FrameDetectionResult
 
-    /// 静止画像に対するシングルショット検出（ステートレス）。
+    /// Detects the document outline in a still image, touching no state at all.
+    ///
+    /// The observation comes back only if it clears the confidence, area and edge-margin checks;
+    /// otherwise the answer is nil, with no way to tell which check turned it down.
     func detect(in cgImage: CGImage) -> VNRectangleObservation?
 
-    /// 内部の安定性追跡状態をリセットする。
+    /// Forgets the smoothed corners and the stability clock so the next frame starts fresh.
+    ///
+    /// Call it after capturing, or the next frames will still be counted as the same held-still
+    /// document and fire another automatic capture immediately.
     func reset()
 }
 
 // MARK: - Implementation
 
-/// `VNDetectDocumentSegmentationRequest` を使用するデフォルト実装。
+/// The default detector, built on Vision's document segmentation request.
+///
+/// Segmentation looks for a document rather than for four straight lines, so it copes with a page
+/// whose edge is partly hidden, and it can equally return a confident quadrilateral around
+/// something that is not paper — the checks in the configuration are what keep those out.
+///
+/// State is guarded by a lock rather than by actor isolation because the camera calls this from
+/// its video output queue, where suspending is not an option. Detection itself runs synchronously
+/// on the calling thread.
 public final class RectangleDetectionServiceImpl: RectangleDetectionService, @unchecked Sendable {
     private let configuration: DetectionConfiguration
 

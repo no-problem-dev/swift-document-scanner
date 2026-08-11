@@ -1,14 +1,24 @@
 import Foundation
 
-/// 書類レイアウト検出の設定。
+/// The thresholds and input size one layout analysis pass runs with.
 public struct LayoutConfiguration: Sendable {
-    /// 検出に使用する最小信頼度しきい値（0.0〜1.0）。
+    /// The lowest class score a region needs to survive, from 0 to 1.
+    ///
+    /// It is applied before overlapping boxes are merged, so lowering it adds work as well as
+    /// results, and the extra results are the ones the model was least sure of.
     public var confidenceThreshold: Float
 
-    /// 1 画像あたりの最大検出数。
+    /// The most regions one image may return.
+    ///
+    /// The cap is applied last and keeps the highest-scoring regions, so raising it only ever
+    /// adds to what you already had.
     public var maximumDetections: Int
 
-    /// モデルの入力画像サイズ（ピクセル、幅と高さ共通）。
+    /// The side length, in pixels, of the square the image is redrawn into for the model.
+    ///
+    /// The bundled model expects 640, and the same number converts the model's output back into
+    /// normalised coordinates — changing it does not make a differently-sized model work, it
+    /// misaligns the boxes. The image is stretched to a square, so aspect ratio is not preserved.
     public var inputSize: Int
 
     public init(
@@ -25,10 +35,13 @@ public struct LayoutConfiguration: Sendable {
 // MARK: - Presets
 
 extension LayoutConfiguration {
-    /// 一般的な書類レイアウト解析向けデフォルト設定。
+    /// General analysis: a score floor of 0.25 and up to 100 regions.
     public static let `default` = LayoutConfiguration()
 
-    /// 書籍ページからの図抽出向け最適化設定。信頼度しきい値を高くして誤検出を抑える。
+    /// Pulling figures out of book pages, trading recall for fewer false positives.
+    ///
+    /// The score floor rises to 0.35 and the cap drops to 50, on the assumption that missing one
+    /// figure costs less than cropping something that was not a figure.
     public static let bookPage = LayoutConfiguration(
         confidenceThreshold: 0.35,
         maximumDetections: 50

@@ -2,13 +2,19 @@
 import DocumentDetection
 import SwiftUI
 
-/// 検出した書類の四隅と安定度インジケータを描画する SwiftUI オーバーレイ。
+/// Draws the detected document outline over a camera preview, counting down to capture.
 ///
-/// 安定度が 1.0 に達すると緑色の太枠を表示する。安定進行中は各コーナーに進捗サークルを表示する。
+/// The outline is thin and yellow while the document is settling and turns thick and green the
+/// moment stability reaches 1. Progress circles appear at the four corners only in between, so
+/// they vanish exactly as the capture becomes due. **Available only where UIKit is, so not on
+/// macOS**, even though nothing in the drawing itself needs UIKit.
+///
+/// It fills whatever space it is given and assumes that space matches the preview beneath it; it
+/// does not know how the preview cropped the frame.
 public struct RectangleOverlayView: View {
-    /// Vision 座標系で表された四隅（0.0〜1.0、原点は左下）。
+    /// The outline to draw, in Vision's bottom-left-origin space — this view flips y itself.
     public let corners: RectangleCorners
-    /// 安定度スコア（0.0〜1.0）。1.0 で自動キャプチャ条件達成。
+    /// Progress towards automatic capture, from 0 to 1, driving both the colour and the circles.
     public let stability: Double
 
     public init(corners: RectangleCorners, stability: Double) {

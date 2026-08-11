@@ -1,300 +1,105 @@
+English | [日本語](./README.ja.md)
+
 # DocumentScanner
 
-Swift package for iOS document scanning
-
-English | [日本語](./README.ja.md)
+Camera capture, rectangle detection, OCR, and layout analysis for scanning documents on iOS.
 
 ![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)
 ![Platforms](https://img.shields.io/badge/Platforms-iOS%2017.0+%20%7C%20macOS%2014.0+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+Four modules you can adopt one at a time: point a camera at a page and get a stable outline, take
+the shot when it settles, read the text off it, and find out where the tables and figures are.
+
 ## Features
 
+- **Live rectangle detection** — Vision-backed, smoothed with an EMA so the outline does not jitter,
+  with a stability score you can show the user
+- **Auto-capture** — the shutter fires on its own once the outline has held still long enough
+- **Multi-language OCR** — Japanese, English, Chinese and whatever else Vision supports on the
+  running OS, with per-line geometry kept so column layouts survive
+- **AI layout analysis** — a bundled YOLOv12n-DocLayNet CoreML model classifies page elements into
+  11 categories, so you can pull out just the tables or just the figures
+- **Presets that encode hard-won settings** — receipts turn language correction off and lower the
+  minimum text height, because dictionary correction quietly rewrites half-width katakana product
+  names into plausible-looking nonsense
+- **Protocol-first, actor-isolated** — every service is a protocol with an injectable
+  implementation, built on `actor`, `AsyncStream` and `Sendable`
+
+## Quick Start
+
+Stream detection results from the camera and capture when the frame settles:
+
 ```swift
-// Real-time rectangle detection via camera
-let stream = await cameraService.startRunning()
-for await result in stream {
-    if result.shouldAutoCapture {
-        let imageData = try await cameraService.captureFrame()
-    }
+import DocumentCamera
+import DocumentDetection
+
+let camera = DocumentCameraServiceImpl(
+    rectangleDetectionService: RectangleDetectionServiceImpl(configuration: .default),
+    configuration: .a4Document
+)
+
+for await result in await camera.startRunning() where result.shouldAutoCapture {
+    let jpeg = try await camera.captureFrame()
+    await camera.stopRunning()
+    break
 }
-
-// Text recognition via OCR
-let ocrResult = try await ocrService.recognizeText(from: imageData)
-print(ocrResult.text)
-
-// Document layout analysis (YOLOv12n-DocLayNet)
-let layout = try await layoutService.analyze(cgImage)
-print(layout.tables) // retrieve table elements
 ```
 
-- **4 independent modules** — DocumentCamera / DocumentDetection / DocumentOCR / DocumentLayout
-- **Real-time rectangle detection** — stable detection with EMA smoothing
-- **Auto-capture** — automatic shutter trigger via stability tracking
-- **Multi-language OCR** — Japanese, English, Chinese, and more
-- **AI layout analysis** — 11-category document element detection with YOLOv12n-DocLayNet
-- **Protocol-based design** — dependency injection for easy testing
-- **Swift Concurrency** — thread-safe design using actor, AsyncStream, and Sendable
-- **Preset configurations** — optimized presets for documents, receipts, books, and more
+Then read the page:
+
+```swift
+import DocumentOCR
+
+let result = try await OCRServiceImpl(configuration: .japanese).recognizeText(from: jpeg)
+print(result.text)
+```
+
+Add `NSCameraUsageDescription` to the host app's `Info.plist`; the system terminates the app without
+it.
+
+## Documentation
+
+API reference and guides, one site per module:
+
+- [**DocumentCamera**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/) —
+  capture session, live stream, preview and overlay, plus the
+  [module map](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/architecture/)
+  for the package as a whole
+- [**DocumentDetection**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentdetection/) —
+  rectangle detection, smoothing, stability, perspective correction
+- [**DocumentOCR**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentocr/) —
+  text recognition and what the result does and does not guarantee
+- [**DocumentLayout**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentlayout/) —
+  layout analysis, the 11 DocLayNet categories, custom models
 
 ## Installation
 
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.5.1"))
+    .package(url: "https://github.com/no-problem-dev/swift-document-scanner.git", .upToNextMajor(from: "0.5.0"))
 ]
 ```
 
-Import only the modules you need:
+Depend only on the modules you use — they are separate products for that reason:
 
 ```swift
-// All modules
-.product(name: "DocumentCamera", package: "swift-document-scanner"),
+.product(name: "DocumentCamera",    package: "swift-document-scanner"),
 .product(name: "DocumentDetection", package: "swift-document-scanner"),
-.product(name: "DocumentOCR", package: "swift-document-scanner"),
-.product(name: "DocumentLayout", package: "swift-document-scanner"),
-
-// Or just the ones you need
-.product(name: "DocumentOCR", package: "swift-document-scanner"),
+.product(name: "DocumentOCR",       package: "swift-document-scanner"),
+.product(name: "DocumentLayout",    package: "swift-document-scanner"),
 ```
 
-Or in Xcode: File > Add Package Dependencies > enter the URL above.
-
-## Module Overview
-
-| Module | Description | Dependencies |
-|--------|-------------|--------------|
-| **DocumentDetection** | Rectangle detection and stability tracking | Vision |
-| **DocumentCamera** | Camera control and live detection stream | DocumentDetection, AVFoundation |
-| **DocumentOCR** | Text recognition (multi-language) | Vision, DocumentImaging |
-| **DocumentLayout** | AI layout analysis (YOLOv12n) | CoreML, Vision, DocumentImaging |
-
-`DocumentImaging` is an internal target (not exported as a product). It decodes image data once and
-carries the EXIF orientation alongside the pixels, so OCR and layout analysis cannot drift apart on
-something that fails silently when you get it wrong.
-
-## Usage
-
-### 1. Document Rectangle Detection
-
-```swift
-import DocumentDetection
-
-// Initialize with a preset configuration
-let detectionService = RectangleDetectionServiceImpl(
-    configuration: .default
-)
-
-// Process a camera frame
-let result = detectionService.process(pixelBuffer)
-if let corners = result.smoothedCorners {
-    // corners.topLeft, .topRight, .bottomLeft, .bottomRight
-    print("stability: \(result.stability)")  // 0.0–1.0
-    if result.shouldAutoCapture {
-        // Auto-capture condition met
-    }
-}
-
-// Single-shot detection on a static image
-if let observation = detectionService.detect(in: cgImage) {
-    print("detected: confidence=\(observation.confidence)")
-}
-```
-
-#### Detection Presets
-
-```swift
-DetectionConfiguration.default    // General document scanning
-DetectionConfiguration.receipt    // Receipt (narrow document)
-DetectionConfiguration.bookPage   // Book page (large document, faster capture)
-DetectionConfiguration.bookSpread // Book spread (relaxed detection)
-```
-
-### 2. Camera + Live Detection
-
-```swift
-import DocumentCamera
-import DocumentDetection
-
-let detectionService = RectangleDetectionServiceImpl(
-    configuration: .default
-)
-let cameraService = DocumentCameraServiceImpl(
-    rectangleDetectionService: detectionService,
-    configuration: .a4Document
-)
-
-// Camera preview (SwiftUI)
-CameraPreviewView(session: cameraService.captureSession)
-
-// Start camera and stream detection results
-let stream = await cameraService.startRunning()
-for await result in stream {
-    if let corners = result.smoothedCorners {
-        // Update overlay
-        updateOverlay(corners: corners)
-    }
-    if result.shouldAutoCapture {
-        let imageData = try await cameraService.captureFrame()
-        // Capture complete
-    }
-}
-
-// Stop camera
-await cameraService.stopRunning()
-```
-
-#### Camera Presets
-
-```swift
-CameraConfiguration.receipt     // Receipt (100mm width, 80% fill)
-CameraConfiguration.bookPage    // Book page (200mm width, 90% fill, high quality)
-CameraConfiguration.a4Document  // A4 document (210mm width, 90% fill)
-```
-
-### 3. OCR Text Recognition
-
-```swift
-import DocumentOCR
-
-// Japanese + English OCR service
-let ocrService = OCRServiceImpl(
-    configuration: .japanese
-)
-
-// Recognize text from image data (EXIF orientation is honored)
-let result = try await ocrService.recognizeText(from: jpegData)
-print(result.text)
-print("confidence: \(result.confidence ?? 0)")
-
-// Per-observation lines with position — needed whenever columns matter
-for line in result.lines {
-    print(line.text, line.confidence, line.boundingBox)
-}
-
-// Also works with CGImage (pass the orientation instead of rotating pixels)
-let result2 = try await ocrService.recognizeText(from: cgImage, orientation: .right)
-```
-
-`result.text` joins every line with `\n`. That is convenient, but the join discards
-which observations sat side by side — on a receipt the item name and its price come back as
-**separate observations**, and the order of `request.results` is not the visual top-to-bottom
-order. Use `result.lines` whenever the column layout matters; pairing them up is left to the
-caller, because the right pairing differs per document type.
-
-#### OCR Presets
-
-```swift
-OCRConfiguration.japanese  // Japanese + English, accurate mode
-OCRConfiguration.english   // English only, accurate mode
-OCRConfiguration.receipt   // Japanese + English, accurate, NO language correction, small print
-```
-
-`.receipt` turns language correction **off** on purpose: receipt item names are written in
-half-width katakana shorthand (`ｱﾀｯｸZERO ﾂﾒｶｴ`), and correction rewrites them into dictionary
-words — the text still looks plausible, so the damage is invisible until you try to match the
-product. It also lowers `minimumTextHeight`, since thermal-printer text is smaller than the
-document-sized default Vision assumes.
-
-#### Custom Configuration
-
-```swift
-let config = OCRConfiguration(
-    recognitionLanguages: ["zh-Hans", "en-US"],  // Chinese + English
-    recognitionLevel: .fast,                      // Fast mode
-    usesLanguageCorrection: false,                // No language correction
-    minimumTextHeight: 0.01                       // nil leaves it to Vision
-)
-```
-
-### 4. Document Layout Analysis
-
-```swift
-import DocumentLayout
-
-// Layout analysis with the YOLOv12n-DocLayNet model
-let layoutService = try DocumentLayoutServiceImpl()
-
-let result = try await layoutService.analyze(cgImage)
-
-// All detected elements
-for element in result.elements {
-    print("\(element.category.rawValue): \(element.confidence)")
-    print("position: \(element.boundingBox)")
-}
-
-// Filter by category
-let tables = result.tables      // Table elements
-let pictures = result.pictures  // Image/figure elements
-let headers = result.elements(ofCategory: .sectionHeader)
-```
-
-#### Detected Categories (DocLayNet 11 Classes)
-
-| Category | Description |
-|----------|-------------|
-| `caption` | Caption |
-| `footnote` | Footnote |
-| `formula` | Formula |
-| `listItem` | List item |
-| `pageFooter` | Page footer |
-| `pageHeader` | Page header |
-| `picture` | Image / figure |
-| `sectionHeader` | Section header |
-| `table` | Table |
-| `text` | Text paragraph |
-| `title` | Title |
-
-#### Using an External Model
-
-```swift
-// Compile a custom model and use it
-let compiledURL = try DocumentLayoutServiceImpl.compileModel(at: modelPackageURL)
-let service = try DocumentLayoutServiceImpl(
-    compiledModelURL: compiledURL,
-    configuration: .init(confidenceThreshold: 0.3, inputSize: 640)
-)
-```
-
-## Architecture
-
-```
-DocumentCamera ──depends──▶ DocumentDetection
-       │                           │
-       │ AVCaptureSession          │ Vision framework
-       │ AsyncStream               │ EMA smoothing
-       ▼                           ▼
-  Camera control          Rectangle detection & tracking
-
-DocumentOCR                DocumentLayout
-       │                           │
-       │ Vision framework          │ CoreML (YOLOv12n)
-       │ Multi-language            │ NMS post-processing
-       ▼                           ▼
-  Text recognition         Layout analysis
-```
+Or in Xcode: File > Add Package Dependencies, and enter the URL above.
 
 ## Requirements
 
-- iOS 17.0+ / macOS 14.0+
+- iOS 17.0+ / macOS 14.0+ — the capture pipeline in `DocumentCamera` is iOS only; detection, OCR and
+  layout analysis run on both
 - Swift 6.2+
 - Xcode 16.0+
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
-## Developer Resources
-
-- [Release Process](RELEASE_PROCESS.md) — how to release a new version
-- [Changelog](CHANGELOG.md) — full version history
-
-## Support
-
-- [Issue Tracker](https://github.com/no-problem-dev/swift-document-scanner/issues)
-- [Discussions](https://github.com/no-problem-dev/swift-document-scanner/discussions)
-
----
-
-Made with ❤️ by [NOPROBLEM](https://github.com/no-problem-dev)
+MIT — see [LICENSE](LICENSE).

@@ -40,13 +40,15 @@ struct OCRResultTests {
         let result = OCRResult(lines: [line("ｱﾀｯｸZERO ﾂﾒｶｴ", 0.8), line("498", 0.6, y: 0.9)])
 
         #expect(result.text == "ｱﾀｯｸZERO ﾂﾒｶｴ\n498")
-        // 平均は二進浮動小数なので、等値ではなく許容差で見る（0.8 と 0.6 の平均は 0.70000005 になる）
+        // The mean is binary floating point, so compare with a tolerance rather than for equality
+        // (the mean of 0.8 and 0.6 comes out as 0.70000005)
         #expect(abs(try #require(result.confidence) - 0.7) < 0.0001)
         #expect(result.lines.count == 2)
     }
 
-    /// レシートの品名と価格は横に離れて別々の観測として返るので、位置が要る。
-    /// 結合した文字列だけでは、どの品名にどの価格が対応するかを復元できない。
+    /// An item name and its price sit apart on a receipt and come back as separate observations,
+    /// which is why the position has to survive. The joined string alone cannot tell you which
+    /// price belongs to which name.
     @Test("位置が保たれる（結合した文字列では失われる情報）")
     func keepsBoundingBoxes() {
         let name = OCRLine(
@@ -61,7 +63,7 @@ struct OCRResultTests {
         )
         let result = OCRResult(lines: [name, price])
 
-        // 同じ高さで横に離れている ＝ 同じ行の品名と価格、と呼び出し側が判断できる
+        // Same height, far apart horizontally — enough for a caller to read them as one row
         #expect(result.lines[0].boundingBox.minY == result.lines[1].boundingBox.minY)
         #expect(result.lines[1].boundingBox.minX > result.lines[0].boundingBox.maxX)
     }

@@ -2,29 +2,34 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-/// 画像データを開いた結果。画素と、それをどう見るべきかの向きの組。
+/// The pixels of a decoded image, paired with the orientation they are meant to be viewed at.
 ///
-/// ## 向きを画素に焼かない
+/// ## Orientation is not baked into the pixels
 ///
-/// カメラで撮った JPEG / HEIC は、**画素を回さずに EXIF の向きだけを立てて**保存するのが普通。
-/// この向きを読まずに画素だけを取り出すと、端末を縦に構えて撮った写真が横倒しのまま出てくる。
-/// Vision も CoreML も画素の並びしか見ないので、そのまま渡すと横倒しの絵として扱われる
-/// （レシートのように文字の向きが結果を左右するものでは、これがそのまま読み取り失敗になる）。
+/// A JPEG or HEIC from a camera normally stores **the pixels unrotated, with the orientation
+/// recorded as metadata**. Take the pixels without reading that metadata and a photo shot with
+/// the device upright comes out lying on its side. Vision and CoreML only look at the pixel
+/// grid, so they treat such an image as genuinely sideways — on something like a receipt, where
+/// the direction of the characters decides the outcome, that is the whole read failing.
 ///
-/// 直し方は 2 つあるが、**回さずに向きを伝えるほう**を採る。
-/// Vision は `VNImageRequestHandler(cgImage:orientation:options:)` で向きを受け取れるので、
-/// 画素を回転させる必要がない —— 回転はメモリと時間を使ううえ、再エンコードすれば劣化もする。
+/// There are two ways to fix it, and this type takes **the one that passes the orientation
+/// along instead of rotating**. Vision accepts an orientation through
+/// `VNImageRequestHandler(cgImage:orientation:options:)`, so nothing has to be turned — rotating
+/// costs memory and time, and re-encoding costs quality on top.
 ///
-/// ## 開き方
+/// ## How the data is opened
 ///
-/// `CIImage(data:)` + `CIContext.createCGImage` ではなく ImageIO を直に使う。
-/// CIContext は GPU/CPU のレンダリング文脈を用意するので、ただデータを開くには重い。
-/// ImageIO なら**同じ 1 回の読み取りで向きのメタデータも取れる**（別々に開き直さない）。
+/// ImageIO is used directly rather than `CIImage(data:)` plus `CIContext.createCGImage`.
+/// A `CIContext` builds a GPU/CPU rendering context, which is heavy for merely opening data,
+/// and ImageIO **reads the orientation metadata in the same single pass** — the file is never
+/// opened a second time.
 public struct DecodedImage {
-    /// 画素。**向きは適用されていない**（`orientation` と組で使う）。
+    /// The decoded pixels, with the stored orientation deliberately **not** applied.
+    ///
+    /// Use it together with `orientation`; on its own it can be sideways.
     public let cgImage: CGImage
 
-    /// この画素をどう見るべきか。メタデータが無ければ `.up`。
+    /// How the pixels are meant to be viewed, defaulting to `.up` when the file said nothing.
     public let orientation: CGImagePropertyOrientation
 
     public init(cgImage: CGImage, orientation: CGImagePropertyOrientation = .up) {
@@ -32,10 +37,11 @@ public struct DecodedImage {
         self.orientation = orientation
     }
 
-    /// JPEG / PNG / HEIC などのデータを開く。画像として読めなければ `nil`。
+    /// Opens JPEG, PNG, HEIC or any other data ImageIO can read, failing only if it is not an image.
     ///
-    /// 向きのメタデータが無い・未知の値のときは `.up` として扱う。ここで失敗にはしない ——
-    /// 向きが分からないことは画像が読めないことではないし、大半の画像は実際に `.up` だから。
+    /// Missing or unrecognised orientation metadata is taken as `.up` rather than treated as a
+    /// failure — not knowing the orientation is not the same as not being able to read the
+    /// image, and most images really are `.up`.
     public init?(data: Data) {
         guard
             let source = CGImageSourceCreateWithData(data as CFData, nil),

@@ -18,10 +18,10 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", .upToNextMajor(from: "1.4.0")),
     ],
     targets: [
-        // 画像データを開く共通部分。**product にしない**（利用者に見せる API ではなく、
-        // OCR と Layout が同じ開き方をすることを保証するための内部の土台）。
-        // 分けているのは、向きの扱いのような「間違えると静かに壊れる」処理が
-        // 2 箇所に複製されると、片方だけ直る事故が起きるため。
+        // The shared image-decoding foundation. **Deliberately not a product** — it is not API for
+        // consumers, only the guarantee that OCR and Layout open an image the same way.
+        // It is a separate target because handling that fails silently when you get it wrong, such
+        // as EXIF orientation, must not be duplicated: one copy would end up fixed and the other not.
         .target(name: "DocumentImaging"),
         .target(name: "DocumentDetection"),
         .target(

@@ -37,9 +37,11 @@ struct OCRConfigurationTests {
         }
     }
 
-    /// レシートの品名は半角カナの独自略記（`ｱﾀｯｸZERO ﾂﾒｶｴ`）で、言語補正をかけると
-    /// 辞書の語に寄って別物になる。**補正が入ったまま出荷されると、読めているのに
-    /// 商品を特定できない**という気づきにくい壊れ方をするので、ここで固定する。
+    /// Item names on a receipt are the shop's own half-width katakana abbreviations.
+    ///
+    /// Language correction pulls them towards dictionary words until they are something else, and
+    /// shipping with it left on breaks quietly: the text reads fine, but the product can no longer
+    /// be identified. Pin it here.
     @Test("Receipt preset disables language correction")
     func receiptDisablesLanguageCorrection() {
         #expect(OCRConfiguration.receipt.usesLanguageCorrection == false)
@@ -48,7 +50,7 @@ struct OCRConfigurationTests {
     @Test("Receipt preset lowers the minimum text height for small print")
     func receiptLowersMinimumTextHeight() throws {
         let height = try #require(OCRConfiguration.receipt.minimumTextHeight)
-        // Vision の既定はおよそ 1/32（0.031）。感熱紙の印字はそれより小さい
+        // Vision's own default is around 1/32 (0.031); thermal-paper print is smaller than that
         #expect(height < 0.031)
         #expect(height > 0)
     }
@@ -62,7 +64,8 @@ struct OCRConfigurationTests {
         }
     }
 
-    /// 既定は Vision に任せる。0 を入れると「下限なし」の指定になり、任せるのとは別の挙動になる。
+    /// The default is to leave it to Vision. Putting 0 in states "no lower bound", which behaves
+    /// differently from leaving it alone.
     @Test("Other presets leave minimumTextHeight to Vision")
     func othersLeaveMinimumTextHeightNil() {
         #expect(OCRConfiguration.japanese.minimumTextHeight == nil)

@@ -1,15 +1,23 @@
 import CoreGraphics
 import Foundation
 
-/// 書類レイアウト解析で検出された要素。
+/// One region of a page that the layout model found, and what it took that region to be.
 public struct LayoutElement: Sendable, Equatable {
-    /// 検出された書類要素の種類。
+    /// The highest-scoring of the eleven classes the model chose for this region.
+    ///
+    /// Only the winner is kept; the scores for the other ten are gone by the time you see this.
     public let category: Category
 
-    /// 正規化バウンディングボックス（0.0〜1.0、原点: 左上）。
+    /// Where the region sits, normalised 0 to 1 with the origin at the **top left** — the
+    /// opposite of the convention Vision and DocumentDetection use.
+    ///
+    /// It is clamped to the image, so a box the model pushed past an edge arrives truncated
+    /// rather than negative or oversized.
     public let boundingBox: CGRect
 
-    /// 検出信頼度（0.0〜1.0）。
+    /// The model's raw score for the winning class, from 0 to 1, uncalibrated.
+    ///
+    /// It says how sure the model is of the label, not how well the box fits the region.
     public let confidence: Float
 
     public init(category: Category, boundingBox: CGRect, confidence: Float) {
@@ -22,32 +30,39 @@ public struct LayoutElement: Sendable, Equatable {
 // MARK: - Category
 
 extension LayoutElement {
-    /// DocLayNet モデルが検出する書類要素カテゴリ（11 クラス）。
+    /// The eleven kinds of region the DocLayNet model was trained to tell apart.
+    ///
+    /// The raw values are DocLayNet's own labels, so they line up with datasets and tools that
+    /// use the same vocabulary. Every region gets one of these and nothing else — there is no
+    /// "unknown" case, so an unusual region is labelled with whichever of the eleven scored best.
     public enum Category: String, Sendable, CaseIterable {
-        /// 図・表などに付属するキャプション（rawValue: `"Caption"`）。
+        /// Text attached to a figure or table that describes it.
         case caption = "Caption"
-        /// ページ下部の脚注（rawValue: `"Footnote"`）。
+        /// A note anchored at the foot of the page, outside the running text.
         case footnote = "Footnote"
-        /// 数式ブロック（rawValue: `"Formula"`）。
+        /// A mathematical expression set apart from the text as its own block.
         case formula = "Formula"
-        /// 箇条書きの各項目（rawValue: `"List-item"`）。
+        /// A single entry in a bulleted or numbered list; a list produces one region per entry.
         case listItem = "List-item"
-        /// ページフッター領域（rawValue: `"Page-footer"`）。
+        /// Running matter at the bottom of the page, such as a page number.
         case pageFooter = "Page-footer"
-        /// ページヘッダー領域（rawValue: `"Page-header"`）。
+        /// Running matter at the top of the page, such as a chapter title.
         case pageHeader = "Page-header"
-        /// 画像・図版（rawValue: `"Picture"`）。
+        /// A photograph, illustration, chart, or diagram.
         case picture = "Picture"
-        /// 節見出し（rawValue: `"Section-header"`）。
+        /// A heading that opens a section, as distinct from the document's own title.
         case sectionHeader = "Section-header"
-        /// 表（rawValue: `"Table"`）。
+        /// A table, located as one block. Its rows, columns, and cells are not recovered.
         case table = "Table"
-        /// 本文テキストブロック（rawValue: `"Text"`）。
+        /// A paragraph-level block of body text.
         case text = "Text"
-        /// 書類タイトル（rawValue: `"Title"`）。
+        /// The title of the document as a whole.
         case title = "Title"
 
-        /// 視覚要素（テキスト以外）かどうか。`picture`・`table`・`formula` が該当する。
+        /// Whether the region is something to look at rather than read.
+        ///
+        /// Tables and formulas count as visual alongside pictures, because their structure is not
+        /// recovered here — cropping the image out is the only thing you can do with them.
         public var isVisual: Bool {
             switch self {
             case .picture, .table, .formula:
@@ -61,26 +76,29 @@ extension LayoutElement {
 
 // MARK: - LayoutResult
 
-/// 単一画像に対する書類レイアウト解析結果。
+/// Everything the layout model found in one image, ordered down the page.
 public struct LayoutResult: Sendable {
-    /// 垂直位置（上から下）でソート済みの検出済み要素。
+    /// The regions found, sorted by the top edge of each box.
+    ///
+    /// It is a single vertical ordering, not a reading order: on a two-column page the two
+    /// columns interleave rather than running down one and then the other.
     public let elements: [LayoutElement]
 
     public init(elements: [LayoutElement]) {
         self.elements = elements.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
     }
 
-    /// 指定カテゴリの要素を絞り込む。
+    /// The regions of one category, still in top-to-bottom order.
     public func elements(ofCategory category: LayoutElement.Category) -> [LayoutElement] {
         elements.filter { $0.category == category }
     }
 
-    /// 検出されたすべての図・画像要素。
+    /// Every picture region, top to bottom — the usual input to cropping figures out of a page.
     public var pictures: [LayoutElement] {
         elements(ofCategory: .picture)
     }
 
-    /// 検出されたすべてのテーブル要素。
+    /// Every table region, top to bottom, located but not parsed into rows and cells.
     public var tables: [LayoutElement] {
         elements(ofCategory: .table)
     }
