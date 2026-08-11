@@ -85,12 +85,6 @@ private func makePNG(_ image: CGImage, orientation: CGImagePropertyOrientation) 
     return data as Data
 }
 
-/// The bundled model is an `.mlpackage`, which only an Xcode-driven build compiles into the
-/// `.mlmodelc` the loader looks for; a plain `swift build` copies it in pieces and the loader
-/// finds nothing. The end-to-end test below therefore runs under `xcodebuild` and is skipped
-/// under `swift test`, rather than being quietly reported as passing there.
-private let modelIsAvailable = (try? DocumentLayoutServiceImpl()) != nil
-
 // MARK: - Tests
 
 @Suite("Layout Orientation Tests")
@@ -117,7 +111,7 @@ struct LayoutOrientationTests {
 
     /// The whole point of the orientation, measured on the result rather than on the input: the
     /// regions found in a sideways-stored photo have to be the regions of the upright page.
-    @Test("回転した写真の解析結果は、起きた画像の解析結果と一致する", .enabled(if: modelIsAvailable))
+    @Test("回転した写真の解析結果は、起きた画像の解析結果と一致する")
     func geometryMatchesTheUprightInterpretation() async throws {
         let service = try DocumentLayoutServiceImpl()
 

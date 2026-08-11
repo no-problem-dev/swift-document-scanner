@@ -6,6 +6,8 @@ Finds the structural elements of a document page — titles, text blocks, tables
 
 `DocumentLayout` runs a YOLOv12n model fine-tuned on DocLayNet, whose eleven categories are exposed as ``LayoutElement/Category``. The model ships inside the package as a Core ML package of roughly 6 MB, so ``DocumentLayoutServiceImpl/init(configuration:)`` needs no download and no network.
 
+A Core ML package is not a loadable model, so the first construction on a device compiles it and keeps the result in the caches directory. That first call takes a few seconds while Core ML prepares the model for the Neural Engine; every one after it takes a fraction of a second, including in later launches. Construct the service off the path a person is waiting on, and hold onto it rather than making a new one per page.
+
 The model emits a raw prediction tensor with no post-processing baked in, so this module does the rest in Swift: it decodes the tensor, drops boxes below ``LayoutConfiguration/confidenceThreshold``, applies per-class non-maximum suppression at an IoU of 0.45, and then keeps the ``LayoutConfiguration/maximumDetections`` highest-confidence survivors. Suppression is per class on purpose — a caption sitting inside a figure's box is a correct result, not a duplicate.
 
 ```swift

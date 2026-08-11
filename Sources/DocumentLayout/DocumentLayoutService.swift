@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import CoreML
+import CryptoKit
 import DocumentImaging
 import Foundation
 import os
@@ -86,21 +87,20 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
 
     /// Loads the nano model that ships with this package.
     ///
-    /// - Throws: `LayoutError.modelLoadFailed` when the resource is missing from the bundle, or a
-    ///   CoreML error when the file is there but will not load.
+    /// The model is bundled as an `.mlpackage`, which CoreML cannot load directly, so the first
+    /// construction on a machine compiles it and keeps the result — see ``compiledBundledModel()``
+    /// for what that costs and why it is kept rather than recompiled.
+    ///
+    /// - Throws: `LayoutError.modelLoadFailed` when the resource is missing from the bundle,
+    ///   ``LayoutError/modelCompilationFailed(_:)`` when it is there but will not compile, or a
+    ///   CoreML error from the load itself.
     public init(configuration: LayoutConfiguration = .default) throws {
         self.configuration = configuration
-
-        guard let modelURL = Bundle.module.url(forResource: "YOLOv12nDocLayNet", withExtension: "mlmodelc")
-            ?? Bundle.module.url(forResource: "YOLOv12nDocLayNet", withExtension: "mlpackage")
-        else {
-            throw LayoutError.modelLoadFailed
-        }
 
         let mlConfig = MLModelConfiguration()
         mlConfig.computeUnits = .all
 
-        self.mlModel = try MLModel(contentsOf: modelURL, configuration: mlConfig)
+        self.mlModel = try MLModel(contentsOf: Self.compiledBundledModel(), configuration: mlConfig)
     }
 
     /// Loads a compiled model you supply, for the larger sizes that do not ship here.
@@ -135,6 +135,87 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
             throw LayoutError.modelCompilationFailed(error.localizedDescription)
         }
     }
+
+    // MARK: - Private — The bundled model
+
+    /// The name the bundled model resource carries, without extension.
+    private static let bundledModelName = ModelVariant.nano.modelFileName
+
+    /// The compiled form of the bundled model, compiling it the first time it is asked for.
+    ///
+    /// The resource ships as an `.mlpackage` and arrives that way from every build — the package
+    /// declares it with SPM's `copy` rule, because `process` flattens directories and an
+    /// `.mlpackage` is a directory whose layout is the file format. CoreML will not load that form,
+    /// so it has to be compiled here.
+    ///
+    /// The result is kept in the caches directory rather than left where `compileModel(at:)` puts
+    /// it, which is a fresh temporary directory each time. That path is what CoreML keys its own
+    /// specialisation on: from a new location every launch, loading the model spends about four
+    /// seconds preparing it for the Neural Engine, against about sixty milliseconds from one it has
+    /// seen before. Compilation itself is the small part, around a tenth of a second.
+    ///
+    /// The cache is addressed by a digest of the model package, so a model that changes with a new
+    /// release compiles itself again instead of loading a stale build, and earlier digests are
+    /// dropped rather than accumulating.
+    private static func compiledBundledModel() throws -> URL {
+        guard let package = Bundle.module.url(forResource: bundledModelName, withExtension: "mlpackage") else {
+            throw LayoutError.modelLoadFailed
+        }
+
+        do {
+            let cacheRoot = try FileManager.default.url(
+                for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+            )
+            .appending(path: "swift-document-scanner", directoryHint: .isDirectory)
+            .appending(path: "CompiledModels", directoryHint: .isDirectory)
+
+            let home = cacheRoot.appending(path: try digest(of: package), directoryHint: .isDirectory)
+            let compiled = home.appending(path: "\(bundledModelName).mlmodelc", directoryHint: .isDirectory)
+            if FileManager.default.fileExists(atPath: compiled.path) { return compiled }
+
+            let fresh = try MLModel.compileModel(at: package)
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.moveItem(at: fresh, to: compiled)
+            } catch {
+                // Someone else compiled the same model while this one was compiling. Their copy is
+                // this copy — the digest says so — so keep it and drop ours. Only a destination
+                // that is still not there means the move actually failed.
+                try? FileManager.default.removeItem(at: fresh)
+                guard FileManager.default.fileExists(atPath: compiled.path) else { throw error }
+            }
+            discardCompilations(in: cacheRoot, keeping: home)
+            return compiled
+        } catch {
+            throw LayoutError.modelCompilationFailed(error.localizedDescription)
+        }
+    }
+
+    /// Identifies a model package by its contents: every file's path and bytes, in a fixed order.
+    private static func digest(of package: URL) throws -> String {
+        var hasher = SHA256()
+        let files = try FileManager.default
+            .subpathsOfDirectory(atPath: package.path)
+            .sorted()
+        for path in files {
+            let file = package.appending(path: path)
+            guard (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            hasher.update(data: Data(path.utf8))
+            hasher.update(data: try Data(contentsOf: file, options: .mappedIfSafe))
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Removes compilations of models this build no longer uses, so an update does not leave the
+    /// previous release's copy behind for good.
+    private static func discardCompilations(in root: URL, keeping current: URL) {
+        let others = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        for other in others where other.lastPathComponent != current.lastPathComponent {
+            try? FileManager.default.removeItem(at: other)
+        }
+    }
+
+    // MARK: - Analysis
 
     public func analyze(_ cgImage: CGImage) async throws -> LayoutResult {
         let elements = try performDetection(on: cgImage)

@@ -35,7 +35,10 @@ let package = Package(
         .target(
             name: "DocumentLayout",
             dependencies: ["DocumentImaging"],
-            resources: [.process("Resources")]
+            // `.copy`, not `.process`: the model is an `.mlpackage`, which is a directory whose
+            // layout is the file format. `.process` flattens directories, so it would put the
+            // package's three files loose in the bundle and leave no model there to load.
+            resources: [.copy("Resources/YOLOv12nDocLayNet.mlpackage")]
         ),
         .testTarget(
             name: "DocumentImagingTests",
