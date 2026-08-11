@@ -157,38 +157,90 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     /// The cache is addressed by a digest of the model package, so a model that changes with a new
     /// release compiles itself again instead of loading a stale build, and earlier digests are
     /// dropped rather than accumulating.
-    private static func compiledBundledModel() throws -> URL {
+    static func compiledBundledModel(in cacheRoot: URL? = nil) throws -> URL {
         guard let package = Bundle.module.url(forResource: bundledModelName, withExtension: "mlpackage") else {
             throw LayoutError.modelLoadFailed
         }
 
         do {
-            let cacheRoot = try FileManager.default.url(
-                for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-            )
-            .appending(path: "swift-document-scanner", directoryHint: .isDirectory)
-            .appending(path: "CompiledModels", directoryHint: .isDirectory)
+            let cacheRoot = try cacheRoot ?? defaultCacheRoot()
 
             let home = cacheRoot.appending(path: try digest(of: package), directoryHint: .isDirectory)
             let compiled = home.appending(path: "\(bundledModelName).mlmodelc", directoryHint: .isDirectory)
-            if FileManager.default.fileExists(atPath: compiled.path) { return compiled }
+            let manifest = home.appending(path: "\(bundledModelName).manifest")
+            if isIntact(compiled, manifest: manifest) { return compiled }
+
+            // Whatever is there is not a whole model. Left in place it would be found again on
+            // every later launch, so the bundled model would never load on this device again.
+            try? FileManager.default.removeItem(at: compiled)
+            try? FileManager.default.removeItem(at: manifest)
 
             let fresh = try MLModel.compileModel(at: package)
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+
+            // Arrive under a private name first. `fresh` is in a temporary directory, which may be
+            // on another volume, and a move across volumes is a recursive copy rather than a
+            // rename — so the destination exists, and is incomplete, for as long as the copy runs.
+            // Under a private name nobody else can mistake that for a finished model.
+            let staging = home.appending(path: "\(UUID().uuidString).partial", directoryHint: .isDirectory)
+            try FileManager.default.moveItem(at: fresh, to: staging)
             do {
-                try FileManager.default.moveItem(at: fresh, to: compiled)
+                // Same directory, so this one is a rename: it either happens or it does not.
+                try FileManager.default.moveItem(at: staging, to: compiled)
+                try writeManifest(for: compiled, to: manifest)
             } catch {
-                // Someone else compiled the same model while this one was compiling. Their copy is
-                // this copy — the digest says so — so keep it and drop ours. Only a destination
-                // that is still not there means the move actually failed.
-                try? FileManager.default.removeItem(at: fresh)
-                guard FileManager.default.fileExists(atPath: compiled.path) else { throw error }
+                try? FileManager.default.removeItem(at: staging)
+                // Someone else may have finished the same compilation while this one was running.
+                // Only a copy that is whole counts as theirs; anything else is wreckage, and is
+                // cleared so the next attempt builds it again.
+                guard isIntact(compiled, manifest: manifest) else {
+                    try? FileManager.default.removeItem(at: compiled)
+                    try? FileManager.default.removeItem(at: manifest)
+                    throw error
+                }
             }
             discardCompilations(in: cacheRoot, keeping: home)
             return compiled
         } catch {
             throw LayoutError.modelCompilationFailed(error.localizedDescription)
         }
+    }
+
+    /// Where compiled models are kept when the caller does not say.
+    private static func defaultCacheRoot() throws -> URL {
+        try FileManager.default.url(
+            for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+        )
+        .appending(path: "swift-document-scanner", directoryHint: .isDirectory)
+        .appending(path: "CompiledModels", directoryHint: .isDirectory)
+    }
+
+    /// Whether everything written into the cache is still there.
+    ///
+    /// **`fileExists` on the directory is not this question.** It is true of an empty directory,
+    /// and of one missing the file CoreML needs most — and a cache guarded by it alone serves the
+    /// wreckage of one failed write for the life of the install, because the path never changes.
+    ///
+    /// Nor is checking one well-known file enough. A `.mlmodelc` missing `model.mil` or its
+    /// `weights` still has `coremldata.bin`, and CoreML does not refuse that: **it segmentation
+    /// faults.** The store this sits in is the caches directory, which the system empties file by
+    /// file rather than tree by tree, so a model with a hole in it is a state to expect.
+    ///
+    /// So the manifest written beside the model records what was there when it was written, and
+    /// every entry has to still exist. Nothing here knows what CoreML's layout is, which is what
+    /// keeps it right when that layout changes.
+    private static func isIntact(_ compiled: URL, manifest: URL) -> Bool {
+        guard let listing = try? String(contentsOf: manifest, encoding: .utf8) else { return false }
+        let paths = listing.split(separator: "\n").map(String.init)
+        guard !paths.isEmpty else { return false }
+        return paths.allSatisfy { FileManager.default.fileExists(atPath: compiled.appending(path: $0).path) }
+    }
+
+    /// Records every path inside the freshly compiled model, so a later launch can tell a complete
+    /// copy from one the system has taken pieces out of.
+    private static func writeManifest(for compiled: URL, to manifest: URL) throws {
+        let paths = try FileManager.default.subpathsOfDirectory(atPath: compiled.path).sorted()
+        try paths.joined(separator: "\n").write(to: manifest, atomically: true, encoding: .utf8)
     }
 
     /// Identifies a model package by its contents: every file's path and bytes, in a fixed order.
@@ -269,11 +321,10 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
             throw LayoutError.detectionFailed("Failed to get model output tensor")
         }
 
-        let all = decodeYOLOOutput(
+        let all = Self.decodeYOLOOutput(
             multiArray: multiArray,
             confidenceThreshold: configuration.confidenceThreshold,
-            imageWidth: CGFloat(cgImage.width),
-            imageHeight: CGFloat(cgImage.height)
+            inputSize: configuration.inputSize
         )
         // Cap to maximumDetections, preferring highest-confidence detections.
         return Array(all.sorted { $0.confidence > $1.confidence }.prefix(configuration.maximumDetections))
@@ -282,11 +333,13 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
     // MARK: - Private — YOLO Output Decoding
 
     /// Decode raw YOLO output tensor [1, numClasses+4, numPredictions] into LayoutElements.
-    private func decodeYOLOOutput(
+    ///
+    /// Static and free of instance state, so the arithmetic between the tensor and a
+    /// ``LayoutElement`` can be pinned from a tensor built in a test, with no model to run.
+    static func decodeYOLOOutput(
         multiArray: MLMultiArray,
         confidenceThreshold: Float,
-        imageWidth: CGFloat,
-        imageHeight: CGFloat
+        inputSize: Int
     ) -> [LayoutElement] {
         let shape = multiArray.shape.map(\.intValue)
         // Expected shape: [1, 15, 8400] or [1, 8400, 15]
@@ -324,7 +377,7 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
 
         var candidates: [(element: LayoutElement, score: Float)] = []
 
-        let inputSize = Float(configuration.inputSize)
+        let inputSize = Float(inputSize)
 
         for i in 0..<numPredictions {
             // bbox: x_center, y_center, w, h (in pixel coords of input 640x640)
@@ -353,11 +406,20 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
             let normW = CGFloat(w / inputSize)
             let normH = CGFloat(h / inputSize)
 
+            // Clip each edge to the page independently. **Moving an edge in has to take the width
+            // with it**: pulling `x` up to 0 while keeping the model's width slides the far edge
+            // outward, so a header or a full-width block that the model puts a little past the
+            // margin — which is most of them — comes back wider than it is.
+            let left = max(0, normX)
+            let top = max(0, normY)
+            let right = min(1, normX + normW)
+            let bottom = min(1, normY + normH)
+
             let box = CGRect(
-                x: max(0, normX),
-                y: max(0, normY),
-                width: min(1 - max(0, normX), normW),
-                height: min(1 - max(0, normY), normH)
+                x: left,
+                y: top,
+                width: max(0, right - left),
+                height: max(0, bottom - top)
             )
 
             let element = LayoutElement(
@@ -369,12 +431,12 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         }
 
         // Apply Non-Maximum Suppression per class
-        return applyNMS(candidates: candidates, iouThreshold: Self.nmsIoUThreshold)
+        return applyNMS(candidates: candidates, iouThreshold: nmsIoUThreshold)
     }
 
     // MARK: - Private — NMS
 
-    private func applyNMS(
+    private static func applyNMS(
         candidates: [(element: LayoutElement, score: Float)],
         iouThreshold: Float
     ) -> [LayoutElement] {
@@ -406,7 +468,7 @@ public actor DocumentLayoutServiceImpl: DocumentLayoutService {
         return results
     }
 
-    private func iou(_ a: CGRect, _ b: CGRect) -> Float {
+    private static func iou(_ a: CGRect, _ b: CGRect) -> Float {
         let intersection = a.intersection(b)
         guard !intersection.isNull else { return 0 }
         let intersectionArea = intersection.width * intersection.height

@@ -85,52 +85,52 @@ public actor OCRServiceImpl: OCRService {
         from cgImage: CGImage,
         orientation: CGImagePropertyOrientation
     ) async throws -> OCRResult {
-        try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
-                    continuation.resume(throwing: OCRError.recognitionFailed(error.localizedDescription))
-                    return
-                }
+        // **No continuation here, and no completion handler.** `perform` runs the request to
+        // completion before it returns, so the results can simply be read off it afterwards.
+        //
+        // Taking the answer from a completion handler *and* from `perform` was the bug this
+        // replaced: Vision reports a refusal down both paths at once — the handler is called with
+        // the error and `perform` throws the same error — so both arms fired and the continuation
+        // was resumed twice. That does not reach the caller as an error. It is
+        // `SWIFT TASK CONTINUATION MISUSE`, and it takes the process with it.
+        let request = VNRecognizeTextRequest()
 
-                guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: OCRResult(lines: []))
-                    return
-                }
-
-                // This is the only place the position is available. Drop it and the caller loses,
-                // permanently, any way to pair up two chunks that sit side by side (see OCRLine).
-                let lines = observations.compactMap { observation -> OCRLine? in
-                    guard let candidate = observation.topCandidates(1).first else { return nil }
-                    return OCRLine(
-                        text: candidate.string,
-                        confidence: candidate.confidence,
-                        boundingBox: observation.boundingBox
-                    )
-                }
-
-                continuation.resume(returning: OCRResult(lines: lines))
-            }
-
-            switch configuration.recognitionLevel {
-            case .accurate:
-                request.recognitionLevel = .accurate
-            case .fast:
-                request.recognitionLevel = .fast
-            }
-            request.recognitionLanguages = configuration.recognitionLanguages
-            request.usesLanguageCorrection = configuration.usesLanguageCorrection
-            // Leave the request alone when nil. Assigning 0 states "no lower bound", which is a
-            // different behaviour from letting Vision apply its own default.
-            if let minimumTextHeight = configuration.minimumTextHeight {
-                request.minimumTextHeight = minimumTextHeight
-            }
-
-            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                continuation.resume(throwing: OCRError.recognitionFailed(error.localizedDescription))
-            }
+        switch configuration.recognitionLevel {
+        case .accurate:
+            request.recognitionLevel = .accurate
+        case .fast:
+            request.recognitionLevel = .fast
         }
+        request.recognitionLanguages = configuration.recognitionLanguages
+        request.usesLanguageCorrection = configuration.usesLanguageCorrection
+        // Leave the request alone when nil. Assigning 0 states "no lower bound", which is a
+        // different behaviour from letting Vision apply its own default.
+        if let minimumTextHeight = configuration.minimumTextHeight {
+            request.minimumTextHeight = minimumTextHeight
+        }
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            throw OCRError.recognitionFailed(error.localizedDescription)
+        }
+
+        guard let observations = request.results else {
+            return OCRResult(lines: [])
+        }
+
+        // This is the only place the position is available. Drop it and the caller loses,
+        // permanently, any way to pair up two chunks that sit side by side (see OCRLine).
+        let lines = observations.compactMap { observation -> OCRLine? in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            return OCRLine(
+                text: candidate.string,
+                confidence: candidate.confidence,
+                boundingBox: observation.boundingBox
+            )
+        }
+
+        return OCRResult(lines: lines)
     }
 }

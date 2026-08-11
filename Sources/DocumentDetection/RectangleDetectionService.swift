@@ -157,6 +157,14 @@ public final class RectangleDetectionServiceImpl: RectangleDetectionService, @un
 
     // MARK: - Private Methods
 
+    /// Runs segmentation and answers with the outline, or nil when there is not a usable one.
+    ///
+    /// **A request that never ran answers nil as well**, which is the same answer as a camera
+    /// pointed at a bare wall — so a caller feeding a pixel format Vision cannot take would watch
+    /// the scanner wait for a document forever with nothing to go on. The error is therefore
+    /// logged rather than dropped. It is not raised: this runs once per camera frame, where
+    /// throwing sixty times a second would be no more usable than silence, and the frame genuinely
+    /// does not have a document in it.
     private func performDocumentDetection(handler: VNImageRequestHandler) -> VNRectangleObservation? {
         var detectedObservation: VNRectangleObservation?
 
@@ -164,7 +172,13 @@ public final class RectangleDetectionServiceImpl: RectangleDetectionService, @un
             detectedObservation = request.results?.first as? VNRectangleObservation
         }
 
-        try? handler.perform([request])
+        do {
+            try handler.perform([request])
+        } catch {
+            Logger(subsystem: "DocumentDetection", category: "segmentation")
+                .error("Document segmentation did not run: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
 
         guard let observation = detectedObservation,
               isValidRectangle(observation) else {
