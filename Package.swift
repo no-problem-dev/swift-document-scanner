@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "DocumentOCR", targets: ["DocumentOCR"]),
         .library(name: "DocumentCamera", targets: ["DocumentCamera"]),
         .library(name: "DocumentLayout", targets: ["DocumentLayout"]),
+        .library(name: "DocumentReading", targets: ["DocumentReading"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", .upToNextMajor(from: "1.4.0")),
@@ -39,6 +40,14 @@ let package = Package(
             // layout is the file format. `.process` flattens directories, so it would put the
             // package's three files loose in the bundle and leave no model there to load.
             resources: [.copy("Resources/YOLOv12nDocLayNet.mlpackage")]
+        ),
+        .target(
+            name: "DocumentReading",
+            dependencies: ["DocumentImaging", "DocumentDetection", "DocumentOCR", "DocumentLayout"]
+        ),
+        .testTarget(
+            name: "DocumentReadingTests",
+            dependencies: ["DocumentReading", "DocumentOCR", "DocumentLayout"]
         ),
         .testTarget(
             name: "DocumentImagingTests",

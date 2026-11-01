@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`DocumentReading`, a new product that reads a photographed page end to end** - `PageReaderImpl`
+  takes encoded data or pixels and returns `ReadPage`: the picture that was read, the lines in reading
+  order with their boxes and whether they run vertically, and the layout region of each line.
+  Every step is a named value of `PageReadingConfiguration`, so nothing runs behind the caller's back:
+  - `cropping` - `.none` reads the picture as it is; `.detectedDocument` finds the outline, corrects
+    its perspective and reads only the inside, falling back to the whole picture when no outline is
+    found (`ReadPage.isCropped` says which happened). There is no default: photos of an open book
+    (a spread, fingers, the desk) are where outline detection goes wrong, so the caller chooses
+  - `correctsRotation` - turns a page photographed on its side or upside down the right way up
+  - `layout` - nil skips the layout model
+  - presets: `.bookPhoto` (no cropping) and `.flatDocument` (cropping)
+- **`PageTextRecognizer` in `DocumentOCR` (iOS 26 / macOS 26)** - reads vertical Japanese and Chinese,
+  which the recogniser behind `OCRService` largely does not, turns the page upright first, and
+  returns `PageText` with the lines in reading order (columns right to left for vertical text) and
+  boxes in top-left-origin space, the same space as `LayoutElement`. The turn is judged from the
+  direction Vision's document reader read each line in and whether it judged the script vertical,
+  weighted by confidence and length
+- **`QuarterTurn`** - a quarter-turn count with its EXIF orientation
+
+### Notes
+- The bundled DocLayNet layout model was trained on horizontal documents. On vertical Japanese
+  book pages it labels most of the page as one table or finds nothing, so `region` is only a hint
+  there
+
 ## [0.5.2] - 2026-08-11
 
 None
