@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-01
+
 ### Added
 - **`DocumentReading`, a new product that reads a photographed page end to end** - `PageReaderImpl`
   takes encoded data or pixels and returns `ReadPage`: the picture that was read, the lines in reading
