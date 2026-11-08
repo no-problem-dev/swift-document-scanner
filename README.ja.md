@@ -60,14 +60,14 @@ print(result.text)
 
 API リファレンスとガイド（モジュールごとに 1 サイト）:
 
-- [**DocumentCamera**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/) —
+- [**DocumentCamera**](Sources/DocumentCamera/DocumentCamera.docc) —
   キャプチャセッション・ライブストリーム・プレビューとオーバーレイ。
-  パッケージ全体の[モジュール地図](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/architecture/)もここにあります
-- [**DocumentDetection**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentdetection/) —
+  パッケージ全体の[モジュール地図](Sources/DocumentCamera/DocumentCamera.docc/Architecture.md)もここにあります
+- [**DocumentDetection**](Sources/DocumentDetection/DocumentDetection.docc) —
   矩形検出・平滑化・安定性・射影変換
-- [**DocumentOCR**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentocr/) —
+- [**DocumentOCR**](Sources/DocumentOCR/DocumentOCR.docc) —
   テキスト認識と、結果が保証すること・しないこと
-- [**DocumentLayout**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentlayout/) —
+- [**DocumentLayout**](Sources/DocumentLayout/DocumentLayout.docc) —
   レイアウト解析・DocLayNet の 11 カテゴリ・外部モデル
 
 ## 導入
