@@ -62,15 +62,15 @@ it.
 
 API reference and guides, one site per module:
 
-- [**DocumentCamera**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/) —
+- [**DocumentCamera**](Sources/DocumentCamera/DocumentCamera.docc) —
   capture session, live stream, preview and overlay, plus the
-  [module map](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentcamera/architecture/)
+  [module map](Sources/DocumentCamera/DocumentCamera.docc/Architecture.md)
   for the package as a whole
-- [**DocumentDetection**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentdetection/) —
+- [**DocumentDetection**](Sources/DocumentDetection/DocumentDetection.docc) —
   rectangle detection, smoothing, stability, perspective correction
-- [**DocumentOCR**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentocr/) —
+- [**DocumentOCR**](Sources/DocumentOCR/DocumentOCR.docc) —
   text recognition and what the result does and does not guarantee
-- [**DocumentLayout**](https://no-problem-dev.github.io/swift-document-scanner/documentation/documentlayout/) —
+- [**DocumentLayout**](Sources/DocumentLayout/DocumentLayout.docc) —
   layout analysis, the 11 DocLayNet categories, custom models
 
 ## Installation
