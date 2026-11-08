@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-08
+
+### Changed
+
+- swift-docc-plugin への依存を外した（DocC は Xcode で開く）
+
 ## [0.6.0] - 2026-11-01
 
 ### Added
@@ -134,7 +140,8 @@ None
   - Presets (japanese, english)
 - **SwiftUI support** - CameraPreviewView, RectangleOverlayView
 
-[Unreleased]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/no-problem-dev/swift-document-scanner/compare/0.6.1...HEAD
+[0.6.1]: https://github.com/no-problem-dev/swift-document-scanner/compare/0.6.0...0.6.1
 [0.5.1]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/0.4.0...v0.5.0
 [0.4.0]: https://github.com/no-problem-dev/swift-document-scanner/compare/v0.3.1...0.4.0
