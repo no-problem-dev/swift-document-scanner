@@ -15,9 +15,6 @@ let package = Package(
         .library(name: "DocumentLayout", targets: ["DocumentLayout"]),
         .library(name: "DocumentReading", targets: ["DocumentReading"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-docc-plugin", .upToNextMajor(from: "1.4.0")),
-    ],
     targets: [
         // The shared image-decoding foundation. **Deliberately not a product** — it is not API for
         // consumers, only the guarantee that OCR and Layout open an image the same way.
